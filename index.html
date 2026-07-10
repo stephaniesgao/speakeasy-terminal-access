@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DEXM Speakeasy Terminal</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+  :root{
+    --term-bg:#0e0a1a; --purple:#c9a9ff; --purple-dim:#9a7fd6; --purple-faint:#6b569e;
+    --hot:#ff6ad5; --ok:#e6d4ff; --flag:#f2e6ff;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;overflow:hidden;background:#0a0710}
+  body{
+    font-family:'IBM Plex Mono','Monaco',ui-monospace,monospace;
+    min-height:100vh; display:flex; align-items:center; justify-content:center;
+    background:
+      radial-gradient(65% 55% at 50% 42%, #3a1e6e 0%, rgba(58,30,110,0) 62%),
+      radial-gradient(130% 100% at 50% 118%, #241344 0%, #150c2b 42%, #0a0710 100%);
+  }
+
+  /* ---- the whole machine is one centered, fixed-aspect stage that scales to fit ---- */
+  #machine{
+    position:relative;
+    width:min(92vw, 132vh);          /* keeps a stable 4:3-ish footprint, always centered */
+    aspect-ratio: 118 / 100;
+    filter: drop-shadow(0 40px 60px rgba(0,0,0,.55));
+  }
+  #machine svg{ position:absolute; inset:0; width:100%; height:100%; display:block; }
+
+  /* live terminal sits in the recessed screen, positioned as a % of the stage (matches the SVG screen rect) */
+  #crt{
+    position:absolute; overflow:hidden; cursor:text; z-index:3;
+    left:20.3%; top:17.2%; width:59.4%; height:47.0%;
+    border-radius:2.4% / 3%;
+    background: radial-gradient(120% 130% at 50% 0%, #18122c 0%, var(--term-bg) 62%, #08040f 100%);
+  }
+  /* scanlines + phosphor vignette on the glass */
+  #crt::before{ content:""; position:absolute; inset:0; pointer-events:none; z-index:6;
+    background:repeating-linear-gradient(to bottom,rgba(0,0,0,0) 0 2px,rgba(120,70,200,.10) 2.5px,rgba(0,0,0,0) 3px);}
+  #crt::after{ content:""; position:absolute; inset:0; pointer-events:none; z-index:7;
+    background:radial-gradient(125% 105% at 50% 42%, rgba(0,0,0,0) 52%, rgba(0,0,0,.6) 100%);}
+
+  #term-header{ position:relative; z-index:2; padding:2.6% 3% 1%; }
+  .hrow{ display:grid; grid-template-columns:1fr auto 1fr; align-items:start; gap:1%; }
+  .dcs{ color:var(--purple-faint); font-size:clamp(6px,1.15vh,12px); line-height:1.35; letter-spacing:.3px; white-space:nowrap; }
+  .wordmark{ position:relative; justify-self:center; }
+  .wordmark pre{ margin:0; color:var(--purple); font-size:clamp(4px,.82vh,9px); line-height:1;
+    text-shadow:0 0 10px rgba(180,130,255,.7),0 0 2px rgba(200,160,255,.9); }
+  .glyphs{ justify-self:end; display:flex; gap:4px; }
+  .glyphs span{ display:inline-flex; align-items:center; justify-content:center; min-width:1.8vh; height:1.7vh;
+    padding:0 .5vh; font-size:clamp(6px,1.1vh,11px); color:var(--purple-dim);
+    border:1px solid rgba(150,110,220,.4); border-radius:3px; background:rgba(120,80,200,.10); }
+
+  #screen{
+    position:relative; z-index:2; height:70%; overflow-y:auto;
+    color:var(--purple); font-size:clamp(8px,1.5vh,15px); line-height:1.45; padding:.6% 3.2%;
+    text-shadow:0 0 6px rgba(180,130,255,.30);
+  }
+  #screen::-webkit-scrollbar{width:5px}
+  #screen::-webkit-scrollbar-thumb{background:var(--purple-faint);border-radius:4px}
+  #screen::-webkit-scrollbar-track{background:transparent}
+  #output{white-space:pre-wrap;word-break:break-word}
+  #inputline{white-space:pre-wrap;word-break:break-word}
+  #prompt{color:var(--ok)} #cmd{color:#efe2ff}
+  #caret{color:var(--purple);animation:blink 1.05s step-end infinite}
+  @keyframes blink{50%{opacity:0}}
+  #hidden{position:absolute;left:-9999px;opacity:0}
+  .dim{color:var(--purple-dim)} .faint{color:var(--purple-faint)}
+  .hot{color:var(--hot)} .ok{color:var(--ok)}
+  .banner{color:var(--purple);text-shadow:0 0 12px rgba(180,130,255,.55)}
+  .flag{color:var(--flag);font-weight:600;text-shadow:0 0 8px rgba(200,160,255,.6)}
+  #term-footer{ position:relative; z-index:2; text-align:center; padding:1% 0; }
+  #progress{ display:inline-flex; align-items:center; gap:6px; font-size:clamp(6px,1.1vh,11px); color:var(--purple-faint); }
+  .pd{ color:var(--purple-faint); opacity:.4; text-shadow:none; }
+  .pd.on{ color:var(--purple); opacity:1; text-shadow:0 0 8px rgba(180,130,255,.8); }
+  .pc{ margin-left:6px; color:var(--purple-dim); }
+
+  @media (prefers-reduced-motion:reduce){#caret{animation:none}}
+  #buttons{
+    position:absolute; z-index:3; left:0; right:0; top:69%;
+    display:flex; gap:2.4%; justify-content:center; pointer-events:none;
+  }
+  #buttons span{
+    width:1.5%; aspect-ratio:1; border-radius:50%;
+    box-shadow:inset 0 1px 1px rgba(255,255,255,.7), inset 0 -1px 2px rgba(0,0,0,.35), 0 1px 2px rgba(0,0,0,.4);
+  }
+  #buttons .r{ background:radial-gradient(circle at 35% 30%, #ffb0ea, #ff5fd0); pointer-events:auto; cursor:pointer; }
+  #buttons .r:active{ transform:scale(0.85); }
+  #buttons .y{ background:radial-gradient(circle at 35% 30%, #d9b8ff, #a970f0); }
+  #buttons .g{ background:radial-gradient(circle at 35% 30%, #efe2ff, #c9a9ff); }
+
+</style>
+</head>
+<body>
+<div id="machine">
+  <svg viewBox="0 0 1180 1000" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+    <defs>
+      <!-- case plastic: soft top-lit cream, subtle warm shadow toward edges -->
+      <linearGradient id="caseFill" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#efe9dc"/>
+        <stop offset="0.5" stop-color="#e2dccd"/>
+        <stop offset="1" stop-color="#cfc7b4"/>
+      </linearGradient>
+      <!-- vertical sheen across the face to fake a curved CRT front -->
+      <linearGradient id="caseSheen" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#ffffff" stop-opacity="0.0"/>
+        <stop offset="0.12" stop-color="#ffffff" stop-opacity="0.28"/>
+        <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.0"/>
+        <stop offset="0.88" stop-color="#3a3524" stop-opacity="0.10"/>
+        <stop offset="1" stop-color="#2a2618" stop-opacity="0.20"/>
+      </linearGradient>
+      <!-- bezel bevel around the screen -->
+      <linearGradient id="bezel" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#b7ae9b"/>
+        <stop offset="0.5" stop-color="#d8d1c0"/>
+        <stop offset="1" stop-color="#ece6d8"/>
+      </linearGradient>
+      <linearGradient id="bezelInner" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#6f6857"/>
+        <stop offset="1" stop-color="#a49c88"/>
+      </linearGradient>
+      <radialGradient id="glass" cx="0.5" cy="0.32" r="0.85">
+        <stop offset="0" stop-color="#161029"/>
+        <stop offset="0.6" stop-color="#0e0a1a"/>
+        <stop offset="1" stop-color="#07040f"/>
+      </radialGradient>
+      <!-- base pedestal -->
+      <linearGradient id="baseFill" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#e0dacb"/>
+        <stop offset="1" stop-color="#b3ab98"/>
+      </linearGradient>
+      <!-- desk -->
+      <linearGradient id="deskTop" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#4a5158"/>
+        <stop offset="1" stop-color="#2b3037"/>
+      </linearGradient>
+      <linearGradient id="deskFront" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#20242a"/>
+        <stop offset="1" stop-color="#0e1013"/>
+      </linearGradient>
+    </defs>
+
+    <!-- ===== DESK (drawn first, behind everything) ===== -->
+    <rect x="0" y="838" width="1180" height="58" fill="url(#deskTop)"/>
+    <rect x="0" y="896" width="1180" height="104" fill="url(#deskFront)"/>
+    <!-- contact shadow of the machine on the desk -->
+    <ellipse cx="590" cy="844" rx="330" ry="22" fill="#000000" opacity="0.42"/>
+
+    <!-- ===== BASE / PEDESTAL (symmetric trapezoid) ===== -->
+    <path d="M 430 838 L 750 838 L 712 738 L 468 738 Z" fill="url(#baseFill)"/>
+    <path d="M 430 838 L 750 838 L 712 738 L 468 738 Z" fill="none" stroke="#8f8672" stroke-width="1.5" opacity="0.5"/>
+    <!-- base top highlight -->
+    <path d="M 468 738 L 712 738 L 708 744 L 472 744 Z" fill="#f0ebde" opacity="0.6"/>
+    <!-- neck where base meets monitor -->
+    <rect x="500" y="716" width="180" height="30" rx="9" fill="#d4ccb9"/>
+
+    <!-- ===== MONITOR CASE (symmetric, rounded) ===== -->
+    <rect x="150" y="40" width="880" height="700" rx="62" fill="url(#caseFill)"/>
+    <rect x="150" y="40" width="880" height="700" rx="62" fill="url(#caseSheen)"/>
+    <!-- top highlight edge -->
+    <rect x="176" y="52" width="828" height="8" rx="4" fill="#ffffff" opacity="0.35"/>
+
+    <!-- ventilation slots (top-right, classic retro detail) -->
+    <g fill="#9a927e" opacity="0.85">
+      <rect x="876" y="78" width="7" height="52" rx="3"/>
+      <rect x="892" y="78" width="7" height="52" rx="3"/>
+      <rect x="908" y="78" width="7" height="52" rx="3"/>
+      <rect x="924" y="78" width="7" height="52" rx="3"/>
+      <rect x="940" y="78" width="7" height="52" rx="3"/>
+      <rect x="956" y="78" width="7" height="52" rx="3"/>
+    </g>
+
+    <!-- brand/label plate (top-left) -->
+    <rect x="214" y="86" width="196" height="34" rx="6" fill="#211e26"/>
+    <text x="312" y="108" font-family="'IBM Plex Mono',monospace" font-size="17" letter-spacing="3"
+          fill="#8b93a6" text-anchor="middle">DCS &#183; M0</text>
+
+    <!-- ===== SCREEN BEZEL (recessed) ===== -->
+    <!-- outer bezel frame -->
+    <rect x="210" y="150" width="760" height="512" rx="40" fill="url(#bezel)"/>
+    <!-- inner rim shadow giving the recessed look -->
+    <rect x="228" y="166" width="724" height="480" rx="32" fill="url(#bezelInner)"/>
+    <!-- the glass well (this is where the HTML #crt overlay lands: x 240 y 172 w 700 h 468) -->
+    <rect x="240" y="172" width="700" height="468" rx="26" fill="url(#glass)"/>
+    <!-- soft top glare on glass -->
+    <ellipse cx="470" cy="250" rx="300" ry="70" fill="#ffffff" opacity="0.04"/>
+
+    <!-- ===== CONTROL STRIP (chin below screen) ===== -->
+  </svg>
+
+  <!-- live terminal, layered into the glass well -->
+  <div id="crt">
+    <div id="term-header">
+      <div class="hrow">
+        <div class="dcs">DCS TERMINAL v1.0<br>DEXM &#183; 07.08.26</div>
+        <div class="wordmark"><pre>&#9608;&#9608;&#9604; &#9608;&#9608;&#9608; &#9608;&#9608;&#9608; &#9604;&#9608;&#9604; &#9608;   &#9608; &#9608; &#9608;&#9608;&#9608;
+&#9608; &#9608; &#9608;   &#9608; &#9608; &#9608;&#9600;&#9608; &#9608;   &#9608; &#9608; &#9608;
+&#9608; &#9608; &#9608;&#9608;&#9608; &#9608; &#9608; &#9608; &#9608; &#9608;   &#9608; &#9608; &#9600;&#9600;&#9608;
+&#9608; &#9608; &#9608;   &#9608; &#9608; &#9608;&#9600;&#9608; &#9608;   &#9608; &#9608; &#9604;&#9604;&#9608;
+&#9608;&#9608;&#9608; &#9608;&#9608;&#9608; &#9608;&#9608;&#9608; &#9608; &#9608; &#9608;&#9608;&#9608; &#9608;&#9608;&#9608; &#9608;&#9608;&#9608;</pre></div>
+        <div class="glyphs"><span>ls</span><span>?</span><span>&#9993;</span><span>&#9834;</span><span>&#9211;</span></div>
+      </div>
+    </div>
+    <div id="screen">
+      <div id="output"></div>
+      <div id="inputline" style="display:none">
+        <span id="prompt"></span><span id="cmd"></span><span id="caret">&#9608;</span>
+      </div>
+    </div>
+    <div id="term-footer"><span id="progress"></span></div>
+  </div>
+
+  <!-- physical buttons under the screen, layered so they get real gloss (HTML gradients > SVG here) -->
+  <div id="buttons"><span class="r" id="btn-restart"></span><span class="y"></span><span class="g"></span></div>
+  <input id="hidden" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
+</div>
+<script>
+
+
+(function(){
+  const out=document.getElementById('output'), cmdEl=document.getElementById('cmd');
+  const promptEl=document.getElementById('prompt'), hidden=document.getElementById('hidden'), screen=document.getElementById('screen');
+  const NL=String.fromCharCode(10);
+  const HOST='dm-0197', MACHINE_ID='dm-0197f2a9';
+  let connected=false;
+  const PROMPTSTR=()=> connected ? ('agent@'+HOST+':'+cwdShort()+'$ ') : 'you@startup-school:~$ ';
+
+  const FLAGS={
+    'dedalus{woke_from_sleep}':1,
+    'dedalus{root_fs_persists}':1,'dedalus{zero_compute_asleep}':1
+  };
+  const banked=new Set();
+  const REVEAL={ password:'TBD (set before launch)', location:'Dedalus office, 9 Bernice Street, San Francisco', time:'doors 9pm, Startup School night' };
+
+  function updateProgress(){
+    const p=document.getElementById('progress'); if(!p) return;
+    let s='';
+    for(let i=0;i<3;i++) s+='<span class="pd'+(i<banked.size?' on':'')+'">■</span>';
+    p.innerHTML=s+'<span class="pc">'+banked.size+'/3</span>';
+  }
+
+  const DEDALUS_ART=[
+    '<span class="banner">&#9608;&#9608;&#9604; &#9608;&#9608;&#9608; &#9608;&#9608;&#9608; &#9604;&#9608;&#9604; &#9608;   &#9608; &#9608; &#9608;&#9608;&#9608;</span>',
+    '<span class="banner">&#9608; &#9608; &#9608;   &#9608; &#9608; &#9608;&#9600;&#9608; &#9608;   &#9608; &#9608; &#9608;  </span>',
+    '<span class="banner">&#9608; &#9608; &#9608;&#9608;&#9608; &#9608; &#9608; &#9608; &#9608; &#9608;   &#9608; &#9608; &#9600;&#9600;&#9608;</span>',
+    '<span class="banner">&#9608; &#9608; &#9608;   &#9608; &#9608; &#9608;&#9600;&#9608; &#9608;   &#9608; &#9608; &#9604;&#9604;&#9608;</span>',
+    '<span class="banner">&#9608;&#9608;&#9608; &#9608;&#9608;&#9608; &#9608;&#9608;&#9608; &#9608; &#9608; &#9608;&#9608;&#9608; &#9608;&#9608;&#9608; &#9608;&#9608;&#9608;</span>'
+  ];
+
+  // solve-state
+  let cellarAwake=false, kilnAsleep=false;
+
+  function f(c){return {type:'file',content:c};}
+
+  const FS={
+    '/':{home:null,root:null,etc:null,var:null,tmp:null,proc:null},
+    '/home':{agent:null},
+    '/home/agent':{'README':f(readme())},
+    '/root':{},
+    '/etc':{dedalus:null},
+    '/etc/dedalus':{'persistence.conf':f(persistenceConf())},
+    '/var':{lib:null},
+    '/var/lib':{dedalus:null},
+    '/var/lib/dedalus':{},
+    '/tmp':{'scratch.txt':f('ephemeral scratch. /tmp is recreated on every wake -- nothing here'+NL+'survives sleep. durable files belong in /home, /root, or /var.')},
+    '/proc':{}
+  };
+
+  const FS_INITIAL = JSON.parse(JSON.stringify(FS)); // pristine snapshot for full restarts
+
+  const EPHEMERAL_DIRS=['/proc','/sys','/dev','/run','/dev/shm','/tmp'];
+  function isEphemeralPath(p){ return EPHEMERAL_DIRS.some(d=>p===d||p.indexOf(d+'/')===0); }
+  const createdFiles=new Set(); // paths the *player* created, so reboot never touches seeded fixtures
+
+  function writeFile(path,content){
+    const p=norm(path), dir=parentOf(p), base=baseOf(p);
+    if(!isDir(dir)) return 'no such directory: '+dir;
+    FS[dir][base]=f(content);
+    createdFiles.add(p);
+    return null;
+  }
+
+  function readme(){return [
+    'DEDALUS MACHINE // '+MACHINE_ID+'   full Linux VM · own kernel · persistent storage','',
+    'you have a real Dedalus Machine, and you are not the only one: there are other',
+    'machines on this account too. three flags are hidden across them, each behind',
+    'something a Dedalus Machine can do that a locked-down sandbox cannot. find all three.','',
+    '  your tools:      help    (every dedalus subcommand also prints its own usage)',
+    '  submit a flag:   submit dedalus{...}',
+    '  check progress:  flags',
+    '  open the door:   unlock',
+    '  last resort:     hint'
+  ].join(NL);}
+
+  function persistenceConf(){return [
+    '# what survives a sleep/wake cycle',
+    'persistent   = /etc /home /root /usr/local /var',
+    'ephemeral    = /proc /sys /dev /run /dev/shm /tmp',
+    '# a conf file is a claim, not a proof.',
+    '# write something to a path in each list, then: reboot'
+  ].join(NL);}
+
+  // ---- path helpers ----
+  let cwd='/home/agent';
+  function cwdShort(){return cwd.replace('/home/agent','~');}
+  function norm(p){
+    if(!p) return cwd;
+    if(p==='~'||p.indexOf('~/')===0) p='/home/agent'+p.slice(1);
+    if(p[0]!=='/') p=(cwd==='/'?'':cwd)+'/'+p;
+    const parts=p.split('/'), st=[];
+    for(const part of parts){ if(part===''||part==='.') continue; if(part==='..') st.pop(); else st.push(part); }
+    return '/'+st.join('/');
+  }
+  function isDir(p){return Object.prototype.hasOwnProperty.call(FS,norm(p));}
+  function parentOf(p){p=norm(p);const i=p.lastIndexOf('/');return i<=0?'/':p.slice(0,i);}
+  function baseOf(p){p=norm(p);return p.slice(p.lastIndexOf('/')+1);}
+  function nodeAt(p){
+    p=norm(p);
+    if(isDir(p)) return {kind:'dir',path:p};
+    const dir=FS[parentOf(p)], base=baseOf(p);
+    if(dir && Object.prototype.hasOwnProperty.call(dir,base) && dir[base]) return {kind:'node',node:dir[base],path:p};
+    return null;
+  }
+  function listing(p){
+    p=norm(p); if(!isDir(p)) return null;
+    const entries=[];
+    for(const key in FS){ if(key!==p && parentOf(key)===p) entries.push({name:baseOf(key),type:'dir'}); }
+    const dir=FS[p]; for(const name in dir){ const v=dir[name]; if(v===null) continue; entries.push({name,type:v.type}); }
+    return entries;
+  }
+
+  // ---- output ----
+  function print(h){ out.innerHTML+=h+NL; screen.scrollTop=screen.scrollHeight; }
+  function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function echoCmd(raw){ print('<span class="ok">'+esc(PROMPTSTR())+'</span>'+esc(raw)); }
+  function opt(args,name){ const i=args.indexOf(name); return i>-1?args[i+1]:''; }
+
+  function run(raw){ const line=raw.trim(); if(line==='') return; exec(line); }
+  function tokenize(line){ const m=line.match(/(?:[^\s"]+|"[^"]*")+/g)||[]; return m.map(t=>t.replace(/^"|"$/g,'')); }
+
+  function exec(line){
+    const parts=tokenize(line), cmd=parts[0], args=parts.slice(1);
+    if(!connected) return preExec(cmd,args);
+    switch(cmd){
+      case 'help': return help();
+      case 'hint': return hint();
+      case 'dedalus': return dedalus(args);
+      case 'ls': return ls(args);
+      case 'cd': return cd(args);
+      case 'pwd': return print(cwd);
+      case 'cat': return cat(args);
+      case 'find': return findCmd(args);
+      case 'df': return df();
+      case 'systemd-detect-virt': return detectVirt();
+      case 'uname': return uname(args);
+      case 'whoami': return print('root');
+      case 'echo': return echoCmdRun(args);
+      case 'touch': return touchCmd(args);
+      case 'reboot': return reboot();
+      case 'restart': return restartAll(args);
+      case 'clear': out.innerHTML=''; return;
+      case 'submit': return submit(args);
+      case 'flags': case 'fragments': return showFlags();
+      case 'unlock': case 'decrypt': return unlock();
+      default: print('<span class="hot">'+esc(cmd)+': command not found</span> <span class="faint">(try: help)</span>');
+    }
+  }
+
+  function preExec(cmd,args){
+    if(cmd==='dedalus'&&args[0]==='ssh'){
+      const id=(args[1]||'').replace(/^\w+@/,'');
+      if(id===MACHINE_ID) return connectSequence();
+      if(/^dm-/.test(id)){ print('<span class="hot">dedalus: no machine '+esc(id)+' in your account</span> <span class="faint">connect to '+MACHINE_ID+'</span>'); return; }
+      print('<span class="faint">usage: dedalus ssh &lt;machine-id&gt;   e.g. dedalus ssh '+MACHINE_ID+'</span>'); return;
+    }
+    if(cmd==='ssh'){ print('<span class="faint">use the dedalus CLI: </span><span class="ok">dedalus ssh '+MACHINE_ID+'</span>'); return; }
+    if(cmd==='dedalus'){ print('<span class="faint">connect first: </span><span class="ok">dedalus ssh '+MACHINE_ID+'</span>'); return; }
+    if(cmd==='clear'){ out.innerHTML=''; return; }
+    if(cmd==='restart'){ restartAll(args); return; }
+    if(cmd==='help'){ print('<span class="faint">not connected yet. run: </span><span class="ok">dedalus ssh '+MACHINE_ID+'</span>'); return; }
+    print('<span class="hot">'+esc(cmd)+': command not found</span> <span class="faint">(not connected. run: dedalus ssh '+MACHINE_ID+')</span>');
+  }
+
+  // ---- dedalus CLI ----
+  function dedalus(args){
+    const a0=args[0];
+    if(a0==='ssh'){ const id=opt(args,'ssh')||args[1]; if(id===MACHINE_ID||id===undefined) print('<span class="faint">already connected to '+MACHINE_ID+'.</span>'); else print('<span class="faint">already connected to this machine.</span>'); return; }
+    if(a0!=='machines'){ print('<span class="faint">dedalus: ssh | machines &lt;list|retrieve|watch|update|sleep|wake|usage&gt;</span>'); return; }
+    const s=args[1];
+    if(s==='list') return machinesList();
+    if(s==='retrieve') return machinesRetrieve(opt(args,'--machine-id'));
+    if(s==='watch'){ print('<span class="faint">watching '+esc(opt(args,'--machine-id')||'?')+' ... phase: running (stream closed)</span>'); return; }
+    if(s==='update') return machinesUpdate(opt(args,'--machine-id'),opt(args,'--autosleep'));
+    if(s==='sleep') return machinesSleep(opt(args,'--machine-id'));
+    if(s==='wake') return machinesWake(opt(args,'--machine-id'));
+    if(s==='usage') return machinesUsage(opt(args,'--machine-id'));
+    if(s==='delete'){ print('<span class="hot">refused:</span> <span class="faint">deleting a machine would take the party with it.</span>'); return; }
+    print('<span class="faint">machines: list | retrieve | watch | update | sleep | wake | usage</span>');
+  }
+
+  function machinesList(){
+    print([
+      '<span class="dim">MACHINE_ID    PHASE      AUTOSLEEP   NOTE</span>',
+      MACHINE_ID+'   running    never       this machine',
+      'dm-cellar     '+(cellarAwake?'running   ':'sleeping  ')+' 5m          '+(cellarAwake?'awake':'asleep -- someone parked it'),
+      'dm-kiln       '+(kilnAsleep?'sleeping  ':'running   ')+' 5m          '+(kilnAsleep?'asleep':'running, metered')
+    ].join(NL));
+  }
+  function machinesRetrieve(id){
+    if(!id){ print('<span class="faint">usage: dedalus machines retrieve --machine-id &lt;id&gt;</span>'); return; }
+    print([
+      '<span class="dim">machine '+esc(id)+'</span>',
+      '  phase              '+((id==='dm-cellar'&&!cellarAwake)?'sleeping':(id==='dm-kiln'&&kilnAsleep)?'sleeping':'running'),
+      '  vcpu / memory      1 / 1024 MiB',
+      '  autosleep_seconds  300',
+      '  storage_gib        5 (persistent)'
+    ].join(NL));
+  }
+
+  function machinesUpdate(id,autosleep){
+    if(!id||!autosleep){ print('<span class="faint">usage: dedalus machines update --machine-id &lt;id&gt; --autosleep &lt;30s|15m|2h|never&gt;</span>'); return; }
+    if(autosleep==='never'){ print('<span class="faint">autosleep=never keeps it awake (and billing). set a real idle window to scale to zero.</span>'); return; }
+    print('<span class="faint">'+esc(id||'?')+' autosleep updated to '+esc(autosleep)+'.</span>');
+  }
+
+  function machinesSleep(id){
+    if(!id){ print('<span class="faint">usage: dedalus machines sleep --machine-id &lt;id&gt;</span>'); return; }
+    if(id===MACHINE_ID){ print('<span class="hot">refused:</span> <span class="faint">you are connected to this machine; you cannot sleep it from inside.</span>'); return; }
+    if(id==='dm-kiln'){ kilnAsleep=true; print('<span class="ok">dm-kiln is now sleeping.</span> <span class="faint">compute billing stops the moment it sleeps; storage keeps ticking on its own meter.</span>'); return; }
+    if(id==='dm-cellar'&&!cellarAwake){ print('<span class="faint">dm-cellar is already asleep.</span>'); return; }
+    print('<span class="ok">'+esc(id)+' is now sleeping.</span>');
+  }
+
+  function machinesWake(id){
+    if(!id){ print('<span class="faint">usage: dedalus machines wake --machine-id &lt;id&gt;</span>'); return; }
+    if(id==='dm-cellar'){
+      cellarAwake=true;
+      print('<span class="ok">waking dm-cellar ... running in 50ms.</span>'+NL+'<span class="faint">root filesystem restored from persistent storage, exactly as it slept. flag:</span> <span class="flag">dedalus{woke_from_sleep}</span>'); return;
+    }
+    print('<span class="faint">'+esc(id)+' is already running.</span>');
+  }
+
+  function machinesUsage(id){
+    if(!id){ print('<span class="faint">usage: dedalus machines usage --machine-id &lt;id&gt;</span>'); return; }
+    if(id==='dm-kiln'){
+      if(kilnAsleep){
+        print([
+          '<span class="dim">usage dm-kiln (last hour)</span>',
+          '  compute   <span class="ok">$0.0000</span>   asleep, per-second compute billing paused',
+          '  storage   $0.0021   persistent, still yours',
+          '<span class="faint">no idle tax: a sleeping machine costs storage only. flag:</span> <span class="flag">dedalus{zero_compute_asleep}</span>'
+        ].join(NL));
+      } else {
+        print([
+          '<span class="dim">usage dm-kiln (last hour)</span>',
+          '  compute   $0.0361   running, billed per second',
+          '  storage   $0.0021   persistent',
+          '<span class="faint">metered while running.</span>'
+        ].join(NL));
+      }
+      return;
+    }
+    print('<span class="dim">usage '+esc(id)+'</span>'+NL+'  compute   $0.0180'+NL+'  storage   $0.0021');
+  }
+
+
+  function help(){ print([
+    '<span class="dim">available commands</span>',
+    '  dedalus                         the Dedalus CLI -- run it for usage',
+    '  dedalus machines                list, retrieve, watch, update, sleep, wake, usage',
+    '  dedalus ssh &lt;id&gt;                open a shell on a machine',
+    '  ls / cd / cat / pwd / find      explore the filesystem',
+    '  touch &lt;path&gt;                    create an empty file',
+    '  echo &lt;text&gt; &gt; &lt;path&gt;            write text to a file',
+    '  reboot                          remount the machine -- ephemeral paths reset',
+    '  df                              disk',
+    '  systemd-detect-virt             what you are running inside',
+    '  uname -a / whoami               kernel / user',
+    '  submit &lt;flag&gt; / flags           bank flags / progress',
+    '  unlock                          open the door once every flag is banked',
+    '  hint                            a conceptual nudge -- never the commands',
+    '  clear                           wipe the screen'
+  ].join(NL)); }
+
+  function ls(args){
+    const fl=args.filter(a=>a[0]==='-').join(''), showAll=fl.indexOf('a')>-1, long=fl.indexOf('l')>-1;
+    const ta=args.find(a=>a[0]!=='-'); const target=ta?norm(ta):cwd;
+    const items=listing(target);
+    if(!items){ print('<span class="hot">ls: '+esc(ta||'')+': not a directory</span>'); return; }
+    const vis=items.filter(i=>showAll||i.name[0]!=='.').sort((a,b)=>a.name.localeCompare(b.name));
+    if(long) print(vis.map(i=> i.type==='dir'?'<span class="dim">drwxr-xr-x  root</span>  '+i.name+'/':'-rw-r--r--  root  '+i.name).join(NL));
+    else print(vis.map(i=> i.type==='dir'?'<span class="dim">'+i.name+'/</span>':i.name).join('   '));
+  }
+
+  function cd(args){
+    const t=args[0]||'/home/agent'; const p=norm(t==='~'?'/home/agent':t);
+    if(isDir(p)){ cwd=p; promptEl.textContent=PROMPTSTR(); }
+    else print('<span class="hot">cd: '+esc(t)+': no such directory</span>');
+  }
+
+  function cat(args){
+    const pa=args.find(a=>a[0]!=='-');
+    const n=nodeAt(pa);
+    if(!n){ print('<span class="hot">cat: '+esc(pa||'')+': No such file or directory</span>'); return; }
+    if(n.kind==='dir'){ print('<span class="hot">cat: '+esc(pa)+': Is a directory</span>'); return; }
+    print(esc(n.node.content));
+  }
+
+  function findCmd(args){
+    const startArg=args.find(a=>a[0]!=='-'); const start=norm(startArg||'/');
+    const ni=args.indexOf('-name'); const pat=ni>-1?(args[ni+1]||'').replace(/^"|"$/g,''):'';
+    const rx=pat?new RegExp('^'+pat.replace(/[.]/g,'\\.').replace(/\*/g,'.*')+'$'):null;
+    const under=p=> start==='/'||p===start||p.indexOf(start+'/')===0;
+    const res=[];
+    for(const dirPath in FS){ if(!under(dirPath)) continue; const dir=FS[dirPath];
+      for(const name in dir){ if(dir[name]===null) continue; if(!rx||rx.test(name)) res.push((dirPath==='/'?'':dirPath)+'/'+name); } }
+    print(res.length?res.join(NL):'<span class="faint">find: no matches</span>');
+  }
+
+  function df(){ print([
+    '<span class="dim">Filesystem       Size  Used  Avail  Use%  Mounted on</span>',
+    '/dev/dedalus0    500G   12G   488G    3%   /',
+    '<span class="faint">persistent storage -- survives sleep. not a read-only container layer.</span>'
+  ].join(NL)); }
+
+  function echoCmdRun(args){
+    const gi=args.indexOf('>');
+    if(gi===-1) return print(esc(args.join(' ')));
+    const content=args.slice(0,gi).join(' '), path=args[gi+1];
+    if(!path){ print('<span class="hot">echo: missing path after &gt;</span>'); return; }
+    const err=writeFile(path,content);
+    if(err){ print('<span class="hot">echo: '+esc(err)+'</span>'); return; }
+    print('<span class="faint">wrote '+esc(norm(path))+'</span>');
+  }
+
+  function touchCmd(args){
+    const path=args.find(a=>a[0]!=='-');
+    if(!path){ print('<span class="faint">usage: touch &lt;path&gt;</span>'); return; }
+    const existing=nodeAt(path);
+    const err=writeFile(path, existing&&existing.kind==='node'?existing.node.content:'');
+    if(err){ print('<span class="hot">touch: '+esc(err)+'</span>'); return; }
+    print('<span class="faint">touched '+esc(norm(path))+'</span>');
+  }
+
+  function reboot(){
+    if(createdFiles.size===0){
+      print([
+        '<span class="dim">rebooting dm-0197 ......................... ok</span>',
+        '<span class="faint">root filesystem remounted from persistent storage.</span>',
+        '<span class="faint">nothing of yours to test yet -- write a file first, then reboot again:</span>',
+        '<span class="ok">  echo hi > /tmp/test.txt   &&   echo hi > /var/lib/test.txt   &&   reboot</span>'
+      ].join(NL));
+      return;
+    }
+    const survived=[], wiped=[];
+    for(const p of Array.from(createdFiles)){
+      if(isEphemeralPath(p)){
+        const dir=FS[parentOf(p)];
+        if(dir) delete dir[baseOf(p)];
+        createdFiles.delete(p);
+        wiped.push(p);
+      } else {
+        survived.push(p);
+      }
+    }
+    print([
+      '<span class="dim">rebooting dm-0197 ......................... ok</span>',
+      '<span class="faint">ephemeral mounts (/tmp, /proc, ...) recreated empty.</span>',
+      '<span class="faint">persistent mounts (/home, /root, /etc, /var) remounted as-is.</span>',
+      ''
+    ].join(NL));
+    if(wiped.length) print('<span class="hot">gone:</span>'+NL+wiped.map(p=>'  '+esc(p)).join(NL));
+    if(survived.length){
+      print('<span class="ok">still here:</span>'+NL+survived.map(p=>'  '+esc(p)).join(NL));
+      print('<span class="faint">it survived a real reboot -- that is not a conf file’s word for it, that is disk. flag:</span> <span class="flag">dedalus{root_fs_persists}</span>');
+    } else {
+      print('<span class="faint">everything you wrote was ephemeral -- nothing to show for it. write to a persistent path (/home, /root, /var) and reboot again.</span>');
+    }
+  }
+
+  function resetFS(){
+    for(const k in FS) delete FS[k];
+    const fresh = JSON.parse(JSON.stringify(FS_INITIAL));
+    for(const k in fresh) FS[k]=fresh[k];
+  }
+
+  function restartAll(args){
+    if(!args||args[0]!=='confirm'){
+      print('<span class="hot">this wipes every flag, every file, the whole session.</span> <span class="faint">if that is really what you want: </span><span class="ok">restart confirm</span>');
+      return;
+    }
+    banked.clear();
+    cellarAwake=false; kilnAsleep=false;
+    createdFiles.clear();
+    resetFS();
+    cwd='/home/agent';
+    connected=false;
+    histBuf.length=0; hp=-1; buffer='';
+    hidden.value=''; cmdEl.textContent='';
+    document.getElementById('inputline').style.display='none';
+    out.innerHTML='';
+    print('<span class="dim">wiping session ................................ ok</span>');
+    print('<span class="faint">every machine, every flag, every file -- back to zero. as if you just walked up.</span>');
+    print('');
+    updateProgress();
+    setTimeout(preIntro, 300);
+  }
+
+  function detectVirt(){ print([
+    '<span class="ok">kvm</span>',
+    '<span class="faint">a full KVM virtual machine: your own kernel, memory, and filesystem, with root.</span>',
+    '<span class="faint">not a shared-kernel container or a v8 isolate.</span>'
+  ].join(NL)); }
+
+  function uname(args){
+    if(args.indexOf('-a')>-1) print('Linux '+MACHINE_ID+' 6.8.0-dedalus #1 SMP x86_64 KVM GNU/Linux');
+    else if(args.indexOf('-r')>-1) print('6.8.0-dedalus');
+    else print('Linux');
+  }
+
+  function submit(args){
+    const flag=(args[0]||'').trim();
+    if(FLAGS[flag]){
+      if(banked.has(flag)){ print('<span class="faint">already banked: </span><span class="flag">'+esc(flag)+'</span>'); return; }
+      banked.add(flag); updateProgress();
+      print('<span class="ok">[+] flag accepted:</span> <span class="flag">'+esc(flag)+'</span>  <span class="faint">('+banked.size+'/3)</span>');
+      if(banked.size===3) print('<span class="dim">all three banked. run: </span><span class="ok">unlock</span>');
+    } else if(/^dedalus\{.*\}$/.test(flag)) print('<span class="hot">[x] not a valid flag.</span> <span class="faint">a real Dedalus Machine flag is durable, not scratch.</span>');
+    else print('<span class="faint">usage: submit dedalus{...}</span>');
+  }
+
+  function showFlags(){
+    if(banked.size===0){ print('<span class="faint">no flags yet. explore your machines.</span>'); return; }
+    print('<span class="dim">banked '+banked.size+'/3:</span>'+NL+[...banked].map(x=>'  <span class="flag">'+esc(x)+'</span>').join(NL));
+  }
+
+  function unlock(){
+    if(banked.size<3){ print('<span class="hot">unlock: '+banked.size+'/3 flags. the vault stays sealed.</span> <span class="faint">missing '+(3-banked.size)+'.</span>'); return; }
+    print([
+      '','<span class="dim">decrypting with recovered key ................ ok</span>',
+      '<span class="banner">+------------------------------------------------+</span>',
+      '<span class="banner">|  ACCESS GRANTED - you built your way in.       |</span>',
+      '<span class="banner">+------------------------------------------------+</span>','',
+      '  <span class="dim">password </span> <span class="flag">'+esc(REVEAL.password)+'</span>',
+      '  <span class="dim">where    </span> '+esc(REVEAL.location),
+      '  <span class="dim">when     </span> '+esc(REVEAL.time),'',
+      '  <span class="faint">say the password at the door. see you there.</span>',''
+    ].join(NL));
+  }
+
+  function hint(){ print('<span class="dim">'+[
+    'nudges, not answers. three flags across your machines:',
+    '  - one of your machines is not awake. bring it back.',
+    '  - what does persistent storage even mean here? write a file, reboot, and watch.',
+    '  - what does a machine cost while it sleeps? measure one before and after.'
+  ].join(NL)+'</span>'); }
+
+  // ---- connect sequence ----
+  const BOOT=[
+    {t:'',d:80},
+    {t:'',d:70},
+    {t:'<span class="banner">  ######  DEXM SPEAKEASY  ######</span>',d:60},
+    {t:'<span class="dim">  connected. root shell on a Dedalus Machine.</span>',d:60},
+    {t:'',d:50},
+    {t:'  three flags open the door. you are not the only machine on this account.',d:40},
+    {t:'  <span class="ok">cat README</span> to begin  -  <span class="ok">help</span> for commands  -  <span class="ok">hint</span> if stuck',d:0}
+  ];
+  let bi=0;
+  function boot(){ if(bi>=BOOT.length){ connected=true; ready(); return; } const s=BOOT[bi++]; print(s.t); setTimeout(boot,s.d); }
+  function connectSequence(){ document.getElementById('inputline').style.display='none'; bi=0; boot(); }
+
+  // ---- input ----
+  const histBuf=[]; let hp=-1, buffer='';
+  function ready(){ promptEl.textContent=PROMPTSTR(); document.getElementById('inputline').style.display=''; screen.scrollTop=screen.scrollHeight; focusInput(); }
+  function focusInput(){ try{ hidden.focus({preventScroll:true}); }catch(e){ hidden.focus(); } }
+  document.getElementById('crt').addEventListener('click',focusInput);
+  hidden.addEventListener('input',()=>{ buffer=hidden.value; cmdEl.textContent=buffer; });
+  hidden.addEventListener('keydown',e=>{
+    if(e.key==='Enter'){
+      e.preventDefault(); const raw=buffer; echoCmd(raw);
+      if(raw.trim()) histBuf.push(raw); hp=histBuf.length; buffer=''; hidden.value=''; cmdEl.textContent='';
+      try{ run(raw); }catch(err){ print('<span class="hot">error: '+esc(String(err))+'</span>'); }
+      promptEl.textContent=PROMPTSTR(); screen.scrollTop=screen.scrollHeight;
+    } else if(e.key==='ArrowUp'){ e.preventDefault(); if(hp>0){ hp--; buffer=histBuf[hp]||''; hidden.value=buffer; cmdEl.textContent=buffer; } }
+    else if(e.key==='ArrowDown'){ e.preventDefault(); if(hp<histBuf.length-1){ hp++; buffer=histBuf[hp]||''; } else { hp=histBuf.length; buffer=''; } hidden.value=buffer; cmdEl.textContent=buffer; }
+  });
+
+  function preIntro(){
+    const lines=[
+      '<span class="dim">DEXM SPEAKEASY // Startup School afterparty</span>',
+      '<span class="faint">the guest list lives on a Dedalus Machine. connect and earn your way in.</span>',
+      '',
+      'a machine has been provisioned for you: <span class="flag">'+MACHINE_ID+'</span>',
+      'connect:  <span class="ok">dedalus ssh '+MACHINE_ID+'</span>',
+      ''
+    ];
+    lines.forEach(l=>print(l));
+    updateProgress(); ready();
+  }
+  document.getElementById('btn-restart').addEventListener('click', function(){ restartAll(['confirm']); });
+  preIntro();
+})();
+
+
+</script>
+</body>
+</html>
