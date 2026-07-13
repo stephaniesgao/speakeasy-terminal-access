@@ -26,11 +26,23 @@ and visit `http://localhost:8000`.
 - Once connected, `help` lists available commands (`ls`, `cd`, `cat`, `dedalus machines ...`, `reboot`, `submit`, etc.).
 - Three flags are hidden behind three different properties of a real Dedalus Machine (vs. a locked-down sandbox):
   - waking a sleeping machine (`dedalus machines wake --machine-id dm-cellar`)
-  - persistent storage surviving a `reboot`
+  - persistent storage surviving a `reboot` — writing any file to a persistent path (even by accident, e.g. a bare `touch file.txt` resolving into `/home/agent`) automatically drops a matching copy into an ephemeral path too (`/tmp` in Set A, the competitor's fake-persistent mount in Set B), so `reboot` always shows a real side-by-side: the copy vanishes, the persistent one survives, and that contrast is what grants the flag (not just a lone surviving file).
   - compute billing dropping to zero while a machine sleeps (`dedalus machines sleep` / `usage` on `dm-kiln`)
 - `submit dedalus{...}` banks a found flag, `flags` shows progress, and `unlock` reveals the door password/location/time once all three are banked.
 - `hint` gives a conceptual nudge without giving away exact commands.
 - The red button under the screen (or `restart confirm`) wipes the whole session back to zero.
+
+## Two challenge sets (A / B)
+
+The **A / B** button in the top-right corner swaps between two independent puzzle configurations. Switching resets the whole session (flags, machine states, filesystem, history).
+
+- **Set A** — the original three challenges described above.
+- **Set B (harder)** — same three pillars (wake / persistence / billing), but each needs a real verification step first:
+  - Waking `dm-cellar` no longer hands you the flag directly — it just confirms the wake happened. The flag is only revealed by then running `dedalus machines retrieve --machine-id dm-cellar`, which shows the actual `last_wake_ms` cold-start figure.
+  - `persistence.conf` claims `/comp/smh` survives a reboot — it doesn't, in Set B (a competitor's mount, and it shows). The flag only comes from a file that's actually in a persistent path (`/home`, `/root`, `/var`, `/etc`) surviving `reboot`, so the conf file's claim has to be tested, not trusted.
+  - `dm-kiln` refuses `dedalus machines sleep` outright in Set B ("fleet autosleep policy"). It only sleeps via `dedalus machines update --machine-id dm-kiln --autosleep <window>`, which then shows the same zero-compute billing result as Set A.
+
+`CHALLENGE_SETS` in `index.html` is the single place both sets' flags/hints live — edit `CHALLENGE_SETS.B` to iterate on Set B further.
 
 ## Files
 

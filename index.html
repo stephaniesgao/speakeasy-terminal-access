@@ -91,6 +91,16 @@
   #buttons .y{ background:radial-gradient(circle at 35% 30%, #d9b8ff, #a970f0); }
   #buttons .g{ background:radial-gradient(circle at 35% 30%, #efe2ff, #c9a9ff); }
 
+  #version-toggle{
+    position:fixed; top:16px; right:16px; z-index:50;
+    font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.5px;
+    color:var(--purple-dim); background:rgba(30,20,50,.55);
+    border:1px solid rgba(150,110,220,.4); border-radius:5px;
+    padding:6px 11px; cursor:pointer; line-height:1;
+    transition:color .15s ease,border-color .15s ease,background .15s ease;
+  }
+  #version-toggle:hover{ color:var(--purple); border-color:rgba(180,130,255,.7); background:rgba(50,30,80,.65); }
+
 </style>
 </head>
 <body>
@@ -216,6 +226,7 @@
   <div id="buttons"><span class="r" id="btn-restart"></span><span class="y"></span><span class="g"></span></div>
   <input id="hidden" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
 </div>
+<button id="version-toggle" title="Switch challenge set (resets the session)">A</button>
 <script>
 
 
@@ -227,18 +238,43 @@
   let connected=false;
   const PROMPTSTR=()=> connected ? ('agent@'+HOST+':'+cwdShort()+'$ ') : 'you@startup-school:~$ ';
 
-  const FLAGS={
-    'dedalus{woke_from_sleep}':1,
-    'dedalus{root_fs_persists}':1,'dedalus{zero_compute_asleep}':1
+  // ---- challenge sets: the corner button swaps FLAGS/hints/mechanics so a harder set
+  // can be designed and tested in "B" without touching the live "A" set ----
+  const CHALLENGE_SETS={
+    A:{
+      label:'Challenge Set A', short:'A',
+      flags:{ wake:'dedalus{woke_from_sleep}', persist:'dedalus{root_fs_persists}', zeroCompute:'dedalus{zero_compute_asleep}' },
+      hints:[
+        'We have the fastest cold starts around. Wake a machine and prove it.',
+        'We’re a REAL persistent VM. Any persistent file can survive a reboot.',
+        'We don’t make you pay for a sleeping machine. Our billing stops when your usage stops.'
+      ]
+    },
+    B:{
+      label:'Challenge Set B (harder)', short:'B',
+      // same three pillars as A (wake / persistence / billing) but each needs a real
+      // verification step first -- see machinesWake, machinesRetrieve, buildFS,
+      // isEphemeralPath, machinesSleep and machinesUpdate for the ACTIVE_SET==='B' branches
+      flags:{ wake:'dedalus{woke_in_50ms}', persist:'dedalus{real_persistence_verified}', zeroCompute:'dedalus{autosleep_zeroed_compute}' },
+      hints:[
+        'We have the fastest cold starts around. Wake dm-cellar, then check the receipts.',
+        'We’re a REAL persistent VM. Not every path that claims to survive a reboot actually does.',
+        'We don’t make you pay for a sleeping machine. Tell us when to sleep, and watch the bill disappear.'
+      ]
+    }
   };
+  let ACTIVE_SET='A';
+  let FLAGS=CHALLENGE_SETS[ACTIVE_SET].flags;
+  function flagCount(){ return Object.keys(FLAGS).length; }
   const banked=new Set();
   const REVEAL={ password:'TBD (set before launch)', location:'Dedalus office, 9 Bernice Street, San Francisco', time:'doors 9pm, Startup School night' };
 
   function updateProgress(){
     const p=document.getElementById('progress'); if(!p) return;
+    const total=flagCount();
     let s='';
-    for(let i=0;i<3;i++) s+='<span class="pd'+(i<banked.size?' on':'')+'">■</span>';
-    p.innerHTML=s+'<span class="pc">'+banked.size+'/3</span>';
+    for(let i=0;i<total;i++) s+='<span class="pd'+(i<banked.size?' on':'')+'">■</span>';
+    p.innerHTML=s+'<span class="pc">'+banked.size+'/'+total+'</span>';
   }
 
   const DEDALUS_ART=[
@@ -250,28 +286,40 @@
   ];
 
   // solve-state
-  let cellarAwake=false, kilnAsleep=false;
+  let cellarAwake=false, kilnAsleep=false, everWiped=false;
 
   function f(c){return {type:'file',content:c};}
 
-  const FS={
-    '/':{home:null,root:null,etc:null,var:null,tmp:null,proc:null},
-    '/home':{agent:null},
-    '/home/agent':{'README':f(readme())},
-    '/root':{},
-    '/etc':{dedalus:null},
-    '/etc/dedalus':{'persistence.conf':f(persistenceConf())},
-    '/var':{lib:null},
-    '/var/lib':{dedalus:null},
-    '/var/lib/dedalus':{},
-    '/tmp':{'scratch.txt':f('ephemeral scratch. /tmp is recreated on every wake -- nothing here'+NL+'survives sleep. durable files belong in /home, /root, or /var.')},
-    '/proc':{}
-  };
+  function buildFS(){
+    const fs={
+      '/':{home:null,root:null,etc:null,var:null,tmp:null,proc:null},
+      '/home':{agent:null},
+      '/home/agent':{'README':f(readme())},
+      '/root':{},
+      '/etc':{dedalus:null},
+      '/etc/dedalus':{'persistence.conf':f(persistenceConf())},
+      '/var':{lib:null},
+      '/var/lib':{dedalus:null},
+      '/var/lib/dedalus':{},
+      '/tmp':{'scratch.txt':f('ephemeral scratch. /tmp is recreated on every wake -- nothing here'+NL+'survives sleep. durable files belong in /home, /root, or /var.')},
+      '/proc':{}
+    };
+    if(ACTIVE_SET==='B'){
+      fs['/'].comp=null;
+      fs['/comp']={smh:null};
+      fs['/comp/smh']={}; // persistence.conf claims this survives sleep -- it does not, in set B (a competitor's mount, and it shows)
+    }
+    return fs;
+  }
 
-  const FS_INITIAL = JSON.parse(JSON.stringify(FS)); // pristine snapshot for full restarts
+  let FS = buildFS(); // rebuilt fresh on every reset/version-switch so seeded files match the active set
 
   const EPHEMERAL_DIRS=['/proc','/sys','/dev','/run','/dev/shm','/tmp'];
-  function isEphemeralPath(p){ return EPHEMERAL_DIRS.some(d=>p===d||p.indexOf(d+'/')===0); }
+  function isEphemeralPath(p){
+    if(EPHEMERAL_DIRS.some(d=>p===d||p.indexOf(d+'/')===0)) return true;
+    if(ACTIVE_SET==='B'&&(p==='/comp/smh'||p.indexOf('/comp/smh/')===0)) return true;
+    return false;
+  }
   const createdFiles=new Set(); // paths the *player* created, so reboot never touches seeded fixtures
 
   function writeFile(path,content){
@@ -279,15 +327,25 @@
     if(!isDir(dir)) return 'no such directory: '+dir;
     FS[dir][base]=f(content);
     createdFiles.add(p);
+    if(!isEphemeralPath(p)){
+      // auto-drop a matching copy into the set's fake-persistent trap (set B) or /tmp (set A)
+      // so a reboot always has a real contrast to show, without the player having to think to write one themselves
+      const shadowDir=(ACTIVE_SET==='B')?'/comp/smh':'/tmp';
+      FS[shadowDir]['also-written.txt']=f('auto-copied here because you wrote to '+p+' -- this path does not survive reboot, no matter what anything claims.');
+      createdFiles.add(shadowDir+'/also-written.txt');
+    }
     return null;
   }
 
   function readme(){return [
-    'DEDALUS MACHINE // '+MACHINE_ID+'   full Linux VM · own kernel · persistent storage','',
-    'you have a real Dedalus Machine, and you are not the only one: there are other',
-    'machines on this account too. three flags are hidden across them, each behind',
-    'something a Dedalus Machine can do that a locked-down sandbox cannot. find all three.','',
-    '  your tools:      help    (every dedalus subcommand also prints its own usage)',
+    'DEDALUS MACHINE // '+MACHINE_ID,'',
+    'you have a real Dedalus Machine, and you are not the only one -- there are other',
+    'machines on this account too. '+flagCount()+' flags are hidden across them:','',
+    '  - wake a machine',
+    '  - prove your storage actually survives a reboot',
+    '  - watch compute billing drop to zero while a machine sleeps','',
+    'find all '+flagCount()+' and the door opens.','',
+    '  your tools:      help',
     '  submit a flag:   submit dedalus{...}',
     '  check progress:  flags',
     '  open the door:   unlock',
@@ -296,7 +354,7 @@
 
   function persistenceConf(){return [
     '# what survives a sleep/wake cycle',
-    'persistent   = /etc /home /root /usr/local /var',
+    'persistent   = /etc /home /root /comp/smh /var',
     'ephemeral    = /proc /sys /dev /run /dev/shm /tmp',
     '# a conf file is a claim, not a proof.',
     '# write something to a path in each list, then: reboot'
@@ -410,24 +468,35 @@
   }
   function machinesRetrieve(id){
     if(!id){ print('<span class="faint">usage: dedalus machines retrieve --machine-id &lt;id&gt;</span>'); return; }
-    print([
+    const lines=[
       '<span class="dim">machine '+esc(id)+'</span>',
       '  phase              '+((id==='dm-cellar'&&!cellarAwake)?'sleeping':(id==='dm-kiln'&&kilnAsleep)?'sleeping':'running'),
       '  vcpu / memory      1 / 1024 MiB',
       '  autosleep_seconds  300',
       '  storage_gib        5 (persistent)'
-    ].join(NL));
+    ];
+    if(ACTIVE_SET==='B'&&id==='dm-cellar'&&cellarAwake){
+      lines.push('  last_wake_ms       50');
+      lines.push('<span class="faint">cold start measured off persistent storage. flag:</span> <span class="flag">'+esc(FLAGS.wake)+'</span>');
+    }
+    print(lines.join(NL));
   }
 
   function machinesUpdate(id,autosleep){
     if(!id||!autosleep){ print('<span class="faint">usage: dedalus machines update --machine-id &lt;id&gt; --autosleep &lt;30s|15m|2h|never&gt;</span>'); return; }
     if(autosleep==='never'){ print('<span class="faint">autosleep=never keeps it awake (and billing). set a real idle window to scale to zero.</span>'); return; }
+    if(ACTIVE_SET==='B'&&id==='dm-kiln'&&!kilnAsleep){
+      kilnAsleep=true;
+      print('<span class="faint">'+esc(id)+' autosleep updated to '+esc(autosleep)+'.</span>'+NL+'<span class="ok">idle window elapsed instantly for this demo -- dm-kiln has gone to sleep on its own.</span>');
+      return;
+    }
     print('<span class="faint">'+esc(id||'?')+' autosleep updated to '+esc(autosleep)+'.</span>');
   }
 
   function machinesSleep(id){
     if(!id){ print('<span class="faint">usage: dedalus machines sleep --machine-id &lt;id&gt;</span>'); return; }
     if(id===MACHINE_ID){ print('<span class="hot">refused:</span> <span class="faint">you are connected to this machine; you cannot sleep it from inside.</span>'); return; }
+    if(ACTIVE_SET==='B'&&id==='dm-kiln'){ print('<span class="hot">refused:</span> <span class="faint">dm-kiln enforces a fleet autosleep policy -- manual sleep is disabled. set an idle window instead.</span>'); return; }
     if(id==='dm-kiln'){ kilnAsleep=true; print('<span class="ok">dm-kiln is now sleeping.</span> <span class="faint">compute billing stops the moment it sleeps; storage keeps ticking on its own meter.</span>'); return; }
     if(id==='dm-cellar'&&!cellarAwake){ print('<span class="faint">dm-cellar is already asleep.</span>'); return; }
     print('<span class="ok">'+esc(id)+' is now sleeping.</span>');
@@ -437,7 +506,12 @@
     if(!id){ print('<span class="faint">usage: dedalus machines wake --machine-id &lt;id&gt;</span>'); return; }
     if(id==='dm-cellar'){
       cellarAwake=true;
-      print('<span class="ok">waking dm-cellar ... running in 50ms.</span>'+NL+'<span class="faint">root filesystem restored from persistent storage, exactly as it slept. flag:</span> <span class="flag">dedalus{woke_from_sleep}</span>'); return;
+      if(ACTIVE_SET==='B'){
+        print('<span class="ok">waking dm-cellar ... done.</span>'+NL+'<span class="faint">root filesystem restored from persistent storage, exactly as it slept. that was fast...</span>');
+      } else {
+        print('<span class="ok">waking dm-cellar ... running in 50ms.</span>'+NL+'<span class="faint">root filesystem restored from persistent storage, exactly as it slept. flag:</span> <span class="flag">'+esc(FLAGS.wake)+'</span>');
+      }
+      return;
     }
     print('<span class="faint">'+esc(id)+' is already running.</span>');
   }
@@ -450,7 +524,7 @@
           '<span class="dim">usage dm-kiln (last hour)</span>',
           '  compute   <span class="ok">$0.0000</span>   asleep, per-second compute billing paused',
           '  storage   $0.0021   persistent, still yours',
-          '<span class="faint">no idle tax: a sleeping machine costs storage only. flag:</span> <span class="flag">dedalus{zero_compute_asleep}</span>'
+          '<span class="faint">no idle tax: a sleeping machine costs storage only. flag:</span> <span class="flag">'+esc(FLAGS.zeroCompute)+'</span>'
         ].join(NL));
       } else {
         print([
@@ -468,7 +542,7 @@
 
   function help(){ print([
     '<span class="dim">available commands</span>',
-    '  dedalus                         the Dedalus CLI -- run it for usage',
+    '  dedalus                         the Dedalus CLI',
     '  dedalus machines                list, retrieve, watch, update, sleep, wake, usage',
     '  dedalus ssh &lt;id&gt;                open a shell on a machine',
     '  ls / cd / cat / pwd / find      explore the filesystem',
@@ -480,7 +554,7 @@
     '  uname -a / whoami               kernel / user',
     '  submit &lt;flag&gt; / flags           bank flags / progress',
     '  unlock                          open the door once every flag is banked',
-    '  hint                            a conceptual nudge -- never the commands',
+    '  hint                            a conceptual nudge',
     '  clear                           wipe the screen'
   ].join(NL)); }
 
@@ -571,28 +645,22 @@
       '<span class="faint">persistent mounts (/home, /root, /etc, /var) remounted as-is.</span>',
       ''
     ].join(NL));
-    if(wiped.length) print('<span class="hot">gone:</span>'+NL+wiped.map(p=>'  '+esc(p)).join(NL));
-    if(survived.length){
-      print('<span class="ok">still here:</span>'+NL+survived.map(p=>'  '+esc(p)).join(NL));
-      print('<span class="faint">it survived a real reboot -- that is not a conf file’s word for it, that is disk. flag:</span> <span class="flag">dedalus{root_fs_persists}</span>');
+    if(wiped.length){ everWiped=true; print('<span class="hot">gone:</span>'+NL+wiped.map(p=>'  '+esc(p)).join(NL)); }
+    if(survived.length) print('<span class="ok">still here:</span>'+NL+survived.map(p=>'  '+esc(p)).join(NL));
+    if(survived.length&&everWiped){
+      print('<span class="faint">it survived a real reboot -- that is not a conf file’s word for it, that is disk. flag:</span> <span class="flag">'+esc(FLAGS.persist)+'</span>');
+    } else if(survived.length){
+      print('<span class="faint">everything you wrote stuck -- but persistence only means something next to something that doesn\'t. write a file into an ephemeral path too (/tmp is the obvious one) and reboot again to see the contrast.</span>');
     } else {
       print('<span class="faint">everything you wrote was ephemeral -- nothing to show for it. write to a persistent path (/home, /root, /var) and reboot again.</span>');
     }
   }
 
-  function resetFS(){
-    for(const k in FS) delete FS[k];
-    const fresh = JSON.parse(JSON.stringify(FS_INITIAL));
-    for(const k in fresh) FS[k]=fresh[k];
-  }
+  function resetFS(){ FS = buildFS(); }
 
-  function restartAll(args){
-    if(!args||args[0]!=='confirm'){
-      print('<span class="hot">this wipes every flag, every file, the whole session.</span> <span class="faint">if that is really what you want: </span><span class="ok">restart confirm</span>');
-      return;
-    }
+  function fullReset(){
     banked.clear();
-    cellarAwake=false; kilnAsleep=false;
+    cellarAwake=false; kilnAsleep=false; everWiped=false;
     createdFiles.clear();
     resetFS();
     cwd='/home/agent';
@@ -601,8 +669,28 @@
     hidden.value=''; cmdEl.textContent='';
     document.getElementById('inputline').style.display='none';
     out.innerHTML='';
+  }
+
+  function restartAll(args){
+    if(!args||args[0]!=='confirm'){
+      print('<span class="hot">this wipes every flag, every file, the whole session.</span> <span class="faint">if that is really what you want: </span><span class="ok">restart confirm</span>');
+      return;
+    }
+    fullReset();
     print('<span class="dim">wiping session ................................ ok</span>');
     print('<span class="faint">every machine, every flag, every file -- back to zero. as if you just walked up.</span>');
+    print('');
+    updateProgress();
+    setTimeout(preIntro, 300);
+  }
+
+  function versionSwitch(set){
+    if(!CHALLENGE_SETS[set]||set===ACTIVE_SET) return;
+    ACTIVE_SET=set;
+    FLAGS=CHALLENGE_SETS[set].flags;
+    fullReset();
+    versionBtn.textContent=CHALLENGE_SETS[set].short;
+    print('<span class="dim">loaded '+esc(CHALLENGE_SETS[set].label)+' -- session reset.</span>');
     print('');
     updateProgress();
     setTimeout(preIntro, 300);
@@ -622,22 +710,22 @@
 
   function submit(args){
     const flag=(args[0]||'').trim();
-    if(FLAGS[flag]){
+    if(Object.values(FLAGS).includes(flag)){
       if(banked.has(flag)){ print('<span class="faint">already banked: </span><span class="flag">'+esc(flag)+'</span>'); return; }
       banked.add(flag); updateProgress();
-      print('<span class="ok">[+] flag accepted:</span> <span class="flag">'+esc(flag)+'</span>  <span class="faint">('+banked.size+'/3)</span>');
-      if(banked.size===3) print('<span class="dim">all three banked. run: </span><span class="ok">unlock</span>');
+      print('<span class="ok">[+] flag accepted:</span> <span class="flag">'+esc(flag)+'</span>  <span class="faint">('+banked.size+'/'+flagCount()+')</span>');
+      if(banked.size===flagCount()) print('<span class="dim">all '+flagCount()+' banked. run: </span><span class="ok">unlock</span>');
     } else if(/^dedalus\{.*\}$/.test(flag)) print('<span class="hot">[x] not a valid flag.</span> <span class="faint">a real Dedalus Machine flag is durable, not scratch.</span>');
     else print('<span class="faint">usage: submit dedalus{...}</span>');
   }
 
   function showFlags(){
     if(banked.size===0){ print('<span class="faint">no flags yet. explore your machines.</span>'); return; }
-    print('<span class="dim">banked '+banked.size+'/3:</span>'+NL+[...banked].map(x=>'  <span class="flag">'+esc(x)+'</span>').join(NL));
+    print('<span class="dim">banked '+banked.size+'/'+flagCount()+':</span>'+NL+[...banked].map(x=>'  <span class="flag">'+esc(x)+'</span>').join(NL));
   }
 
   function unlock(){
-    if(banked.size<3){ print('<span class="hot">unlock: '+banked.size+'/3 flags. the vault stays sealed.</span> <span class="faint">missing '+(3-banked.size)+'.</span>'); return; }
+    if(banked.size<flagCount()){ print('<span class="hot">unlock: '+banked.size+'/'+flagCount()+' flags. the vault stays sealed.</span> <span class="faint">missing '+(flagCount()-banked.size)+'.</span>'); return; }
     print([
       '','<span class="dim">decrypting with recovered key ................ ok</span>',
       '<span class="banner">+------------------------------------------------+</span>',
@@ -651,24 +739,21 @@
   }
 
   function hint(){ print('<span class="dim">'+[
-    'nudges, not answers. three flags across your machines:',
-    '  - one of your machines is not awake. bring it back.',
-    '  - what does persistent storage even mean here? write a file, reboot, and watch.',
-    '  - what does a machine cost while it sleeps? measure one before and after.'
+    'Hints. You have '+flagCount()+' flags to find:',
+    ...CHALLENGE_SETS[ACTIVE_SET].hints.map((h,i)=>(i+1)+'. '+h)
   ].join(NL)+'</span>'); }
 
   // ---- connect sequence ----
   const BOOT=[
-    {t:'',d:80},
-    {t:'',d:70},
-    {t:'<span class="banner">  ######  DEXM SPEAKEASY  ######</span>',d:60},
-    {t:'<span class="dim">  connected. root shell on a Dedalus Machine.</span>',d:60},
-    {t:'',d:50},
-    {t:'  three flags open the door. you are not the only machine on this account.',d:40},
-    {t:'  <span class="ok">cat README</span> to begin  -  <span class="ok">help</span> for commands  -  <span class="ok">hint</span> if stuck',d:0}
+    {t:()=>'',d:80},
+    {t:()=>'',d:70},
+    {t:()=>'<span class="banner">  ######  DEXM SPEAKEASY  ######</span>',d:60},
+    {t:()=>'<span class="dim">  connected. root shell on a Dedalus Machine.</span>',d:60},
+    {t:()=>'',d:50},
+    {t:()=>'  <span class="ok">cat README</span> to begin  -  <span class="ok">help</span> for commands  -  <span class="ok">hint</span> if stuck',d:0}
   ];
   let bi=0;
-  function boot(){ if(bi>=BOOT.length){ connected=true; ready(); return; } const s=BOOT[bi++]; print(s.t); setTimeout(boot,s.d); }
+  function boot(){ if(bi>=BOOT.length){ connected=true; ready(); return; } const s=BOOT[bi++]; print(s.t()); setTimeout(boot,s.d); }
   function connectSequence(){ document.getElementById('inputline').style.display='none'; bi=0; boot(); }
 
   // ---- input ----
@@ -688,18 +773,27 @@
   });
 
   function preIntro(){
+    const title='DEXM SPEAKEASY // Startup School afterparty';
+    const pad=title.length+4;
     const lines=[
-      '<span class="dim">DEXM SPEAKEASY // Startup School afterparty</span>',
-      '<span class="faint">the guest list lives on a Dedalus Machine. connect and earn your way in.</span>',
+      '<span class="banner">╭'+'─'.repeat(pad)+'╮</span>',
+      '<span class="banner">│</span>  <span class="dim">'+title+'</span>  <span class="banner">│</span>',
+      '<span class="banner">╰'+'─'.repeat(pad)+'╯</span>',
       '',
-      'a machine has been provisioned for you: <span class="flag">'+MACHINE_ID+'</span>',
-      'connect:  <span class="ok">dedalus ssh '+MACHINE_ID+'</span>',
+      '<span class="faint">ssh into an emulated Dedalus Machine.</span>',
+      '<span class="faint">the afterparty is tonight -- if you want a ticket, you gotta earn it.</span>',
+      '',
+      '  '+'machine provisioned:'.padEnd(22)+MACHINE_ID,
+      '  '+'command to connect:'.padEnd(22)+'<span class="ok">dedalus ssh '+MACHINE_ID+'</span>',
       ''
     ];
     lines.forEach(l=>print(l));
     updateProgress(); ready();
   }
   document.getElementById('btn-restart').addEventListener('click', function(){ restartAll(['confirm']); });
+  const versionBtn=document.getElementById('version-toggle');
+  versionBtn.textContent=CHALLENGE_SETS[ACTIVE_SET].short;
+  versionBtn.addEventListener('click', function(){ versionSwitch(ACTIVE_SET==='A'?'B':'A'); });
   preIntro();
 })();
 
