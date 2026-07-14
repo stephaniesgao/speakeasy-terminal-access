@@ -204,7 +204,7 @@
   <div id="crt">
     <div id="term-header">
       <div class="hrow">
-        <div class="dcs">DCS TERMINAL v1.0<br>DEXM &#183; 07.08.26</div>
+        <div class="dcs" id="dcs-date">DCS TERMINAL v1.0<br>DEXM &#183; 07.13.26</div>
         <div class="wordmark"><pre>&#9608;&#9608;&#9604; &#9608;&#9608;&#9608; &#9608;&#9608;&#9608; &#9604;&#9608;&#9604; &#9608;   &#9608; &#9608; &#9608;&#9608;&#9608;
 &#9608; &#9608; &#9608;   &#9608; &#9608; &#9608;&#9600;&#9608; &#9608;   &#9608; &#9608; &#9608;
 &#9608; &#9608; &#9608;&#9608;&#9608; &#9608; &#9608; &#9608; &#9608; &#9608;   &#9608; &#9608; &#9600;&#9600;&#9608;
@@ -231,6 +231,12 @@
 
 
 (function(){
+  const dcsDateEl=document.getElementById('dcs-date');
+  if(dcsDateEl){
+    const d=new Date(), pad=n=>String(n).padStart(2,'0');
+    const stamp=pad(d.getMonth()+1)+'.'+pad(d.getDate())+'.'+String(d.getFullYear()).slice(-2);
+    dcsDateEl.innerHTML='DCS TERMINAL v1.0<br>DEXM &#183; '+stamp;
+  }
   const out=document.getElementById('output'), cmdEl=document.getElementById('cmd');
   const promptEl=document.getElementById('prompt'), hidden=document.getElementById('hidden'), screen=document.getElementById('screen');
   const NL=String.fromCharCode(10);
@@ -339,12 +345,13 @@
 
   function readme(){return [
     'DEDALUS MACHINE // '+MACHINE_ID,'',
-    'you have a real Dedalus Machine, and you are not the only one -- there are other',
-    'machines on this account too. '+flagCount()+' flags are hidden across them:','',
+    'You’re currently operating on a Dedalus machine, a persistent VM built for agents.',
+    'There are a couple more out there too. Track down all '+flagCount()+' hidden flags across',
+    'them, and you’ll earn access to the DEXM speakeasy.','',
+    'CTFs:',
     '  - wake a machine',
     '  - prove your storage actually survives a reboot',
     '  - watch compute billing drop to zero while a machine sleeps','',
-    'find all '+flagCount()+' and the door opens.','',
     '  your tools:      help',
     '  submit a flag:   submit dedalus{...}',
     '  check progress:  flags',
@@ -462,7 +469,7 @@
     print([
       '<span class="dim">MACHINE_ID    PHASE      AUTOSLEEP   NOTE</span>',
       MACHINE_ID+'   running    never       this machine',
-      'dm-cellar     '+(cellarAwake?'running   ':'sleeping  ')+' 5m          '+(cellarAwake?'awake':'asleep -- someone parked it'),
+      'dm-cellar     '+(cellarAwake?'running   ':'sleeping  ')+' 5m          '+(cellarAwake?'awake':'asleep'),
       'dm-kiln       '+(kilnAsleep?'sleeping  ':'running   ')+' 5m          '+(kilnAsleep?'asleep':'running, metered')
     ].join(NL));
   }
@@ -677,9 +684,6 @@
       return;
     }
     fullReset();
-    print('<span class="dim">wiping session ................................ ok</span>');
-    print('<span class="faint">every machine, every flag, every file -- back to zero. as if you just walked up.</span>');
-    print('');
     updateProgress();
     setTimeout(preIntro, 300);
   }
@@ -744,11 +748,44 @@
   ].join(NL)+'</span>'); }
 
   // ---- connect sequence ----
+  const WING=[
+    '                                                ..',
+    '                                                ..',
+    '                                               ...',
+    '                                              ....',
+    '                                             ....',
+    '                                            .....',
+    '                                           .....',
+    '                                         ......',
+    '                                      ........',
+    '                                    ........',
+    '                                 .........',
+    '                             ...........       ...',
+    '                         ............         ....',
+    '                     .............           ....',
+    '                 ..............            .....',
+    '             ..............              ......',
+    '         ..............                .......',
+    '      ............                   .......',
+    '    .........                     ........',
+    '  ........                     .........',
+    ' ......                   ...........',
+    '......               ............',
+    '.....                                      ..',
+    '....                                    ....',
+    '...                                    ....',
+    '..                                 .......',
+    '.                            ..........',
+    '.               ....................',
+    '.            ..................'
+  ].join(NL);
   const BOOT=[
     {t:()=>'',d:80},
     {t:()=>'',d:70},
     {t:()=>'<span class="banner">  ######  DEXM SPEAKEASY  ######</span>',d:60},
     {t:()=>'<span class="dim">  connected. root shell on a Dedalus Machine.</span>',d:60},
+    {t:()=>'',d:50},
+    {t:()=>'<span class="banner">'+WING+'</span>',d:80},
     {t:()=>'',d:50},
     {t:()=>'  <span class="ok">cat README</span> to begin  -  <span class="ok">help</span> for commands  -  <span class="ok">hint</span> if stuck',d:0}
   ];
