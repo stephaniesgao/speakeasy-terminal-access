@@ -273,7 +273,7 @@
   let FLAGS=CHALLENGE_SETS[ACTIVE_SET].flags;
   function flagCount(){ return Object.keys(FLAGS).length; }
   const banked=new Set();
-  const REVEAL={ password:'TBD (set before launch)', location:'Dedalus office, 9 Bernice Street, San Francisco', time:'doors 9pm, Startup School night' };
+  const REVEAL={ password:'TBD (set before launch)', location:'9 Bernice Street, San Francisco', time:'doors 7pm, July 25th' };
 
   function updateProgress(){
     const p=document.getElementById('progress'); if(!p) return;
@@ -731,7 +731,7 @@
   function unlock(){
     if(banked.size<flagCount()){ print('<span class="hot">unlock: '+banked.size+'/'+flagCount()+' flags. the vault stays sealed.</span> <span class="faint">missing '+(flagCount()-banked.size)+'.</span>'); return; }
     print([
-      '','<span class="dim">decrypting with recovered key ................ ok</span>',
+      '',
       '<span class="banner">+------------------------------------------------+</span>',
       '<span class="banner">|  ACCESS GRANTED - you built your way in.       |</span>',
       '<span class="banner">+------------------------------------------------+</span>','',
@@ -817,8 +817,8 @@
       '<span class="banner">│</span>  <span class="dim">'+title+'</span>  <span class="banner">│</span>',
       '<span class="banner">╰'+'─'.repeat(pad)+'╯</span>',
       '',
-      '<span class="faint">ssh into an emulated Dedalus Machine.</span>',
-      '<span class="faint">the afterparty is tonight -- if you want a ticket, you gotta earn it.</span>',
+      '<span class="faint">ssh into a Dedalus Machine.</span>',
+      '<span class="faint">the afterparty is tonight -- if you want a ticket, you’ll have to earn it.</span>',
       '',
       '  '+'machine provisioned:'.padEnd(22)+MACHINE_ID,
       '  '+'command to connect:'.padEnd(22)+'<span class="ok">dedalus ssh '+MACHINE_ID+'</span>',
