@@ -2,7 +2,7 @@
 
 Spec: [🕹️ Speakeasy Terminal Entry Experience Spec](https://app.notion.com/p/Speakeasy-Terminal-Entry-Experience-Spec-3967871fd43c800ea7a2e5f2be7c5a11)
 
-A single-page, interactive retro-terminal puzzle for the DEXM Speakeasy (Dedalus Startup School afterparty). It renders a CRT-style monitor in the browser and drops the player into a simulated shell where they explore a fake filesystem, wake and sleep machines, and bank flags to unlock the party details (password, location, time).
+A single-page, interactive terminal puzzle for the DEXM Speakeasy (Dedalus Startup School afterparty). It renders a large purple-and-white terminal designed for an event monitor and drops the player into a simulated shell where they explore a fake filesystem, wake and sleep machines, and bank three flags to unlock the party details (password, location, time).
 
 ## Running it
 
@@ -24,26 +24,25 @@ and visit `http://localhost:8000`.
 
 - The terminal starts disconnected. Running `dedalus ssh dm-0197f2a9` connects to the provisioned machine.
 - Once connected, `help` lists available commands (`ls`, `cd`, `cat`, `dedalus machines ...`, `reboot`, `submit`, etc.).
-- Three flags are hidden behind three different properties of a real Dedalus Machine (vs. a locked-down sandbox):
-  - waking a sleeping machine (`dedalus machines wake --machine-id dm-cellar`)
-  - persistent storage surviving a `reboot` — writing any file to a persistent path (even by accident, e.g. a bare `touch file.txt` resolving into `/home/agent`) automatically drops a matching copy into an ephemeral path too (`/tmp` in Set A, the competitor's fake-persistent mount in Set B), so `reboot` always shows a real side-by-side: the copy vanishes, the persistent one survives, and that contrast is what grants the flag (not just a lone surviving file).
-  - compute billing dropping to zero while a machine sleeps (`dedalus machines sleep` / `usage` on `dm-kiln`)
+- Three flags are hidden behind Dedalus Machine differentiators:
+  - waking the sleeping machine Igris (`dedalus machines wake --machine-id dm-igris`)
+  - benchmarking `dm-mcqueen` across five forced cold boots, measured until a guest command succeeds (using the discoverable script in the starting directory in Set A)
+  - compute billing dropping to zero while a machine sleeps (`dedalus machines sleep` / `usage` on `dm-han`)
 - `submit dedalus{...}` banks a found flag, `flags` shows progress, and `unlock` reveals the door password/location/time once all three are banked.
 - `hint` gives a conceptual nudge without giving away exact commands.
 - The red button under the screen (or `restart confirm`) wipes the whole session back to zero.
 
-## Two challenge sets (A / B)
+## Three challenge sets (A / B / C)
 
-The **A / B** button in the top-right corner swaps between two independent puzzle configurations. Switching resets the whole session (flags, machine states, filesystem, history).
+The A/B/C controls are temporarily visible for mode testing. B loads by default; `?level=A`, `?level=B`, or `?level=C` can also load a specific set. Switching levels resets the whole session (flags, machine states, filesystem, history).
 
-- **Set A** — the original three challenges described above.
-- **Set B (harder)** — same three pillars (wake / persistence / billing), but each needs a real verification step first:
-  - Waking `dm-cellar` no longer hands you the flag directly — it just confirms the wake happened. The flag is only revealed by then running `dedalus machines retrieve --machine-id dm-cellar`, which shows the actual `last_wake_ms` cold-start figure.
-  - `persistence.conf` claims `/comp/smh` survives a reboot — it doesn't, in Set B (a competitor's mount, and it shows). The flag only comes from a file that's actually in a persistent path (`/home`, `/root`, `/var`, `/etc`) surviving `reboot`, so the conf file's claim has to be tested, not trusted.
-  - `dm-kiln` refuses `dedalus machines sleep` outright in Set B ("fleet autosleep policy"). It only sleeps via `dedalus machines update --machine-id dm-kiln --autosleep <window>`, which then shows the same zero-compute billing result as Set A.
+- **Set A (easy)** — wake `dm-igris` for a direct persistence flag, run the visible McQueen benchmark script without needing a machine argument for a direct speed flag, and sleep `dm-han` for a direct zero-compute flag.
+- **Set B (medium, the current experience)** — wake Igris and inspect its generated lifecycle log; inspect the McQueen script, run it with `dm-mcqueen`, then retrieve McQueen’s recorded result; inspect Han’s running usage, sleep it, and inspect usage again.
 
-`CHALLENGE_SETS` in `index.html` is the single place both sets' flags/hints live — edit `CHALLENGE_SETS.B` to iterate on Set B further.
+- **Set C (hard)** — evidence-chain versions of the same differentiators: players must verify the virtualization layer as well as cold-start speed, test real disk against a misleading competitor-style mount, and observe an autosleep phase change before zero compute billing yields its flag.
+
+`CHALLENGE_SETS` in `index.html` is the single place all three sets' flags and hints live.
 
 ## Files
 
-- `index.html` — the entire app: SVG terminal chassis, CRT overlay, and the JS shell/puzzle logic, all inline.
+- `index.html` — the entire app: terminal design and JS shell/puzzle logic, all inline.
