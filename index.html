@@ -108,9 +108,6 @@
   @media (prefers-reduced-motion:reduce){#caret{animation:none}}
   #buttons{display:none}
 
-  #level-picker{position:fixed;left:50%;top:81vh;transform:translateX(-50%);z-index:50;display:flex;gap:4px}
-  #level-picker button{font:600 11px 'SFMono-Regular','SF Mono',ui-monospace,monospace;color:var(--purple-dim);background:#101010;border:1px solid rgba(210,190,255,.25);border-radius:5px;padding:5px 11px;cursor:pointer}
-  #level-picker button.active{color:#fff;background:rgba(210,190,255,.16);box-shadow:0 0 10px rgba(210,190,255,.08)}
   @media(max-width:900px){#screen{padding:36px 40px 28px}}
   @media(max-width:700px){.wordmark{width:120px;height:28px}.wordmark img{width:108px}.glyphs{display:block}.hrow{grid-template-columns:72px 1fr 72px}#screen{padding:24px 22px}.dcs::before{width:9px;height:9px;box-shadow:18px 0 #625b6d,36px 0 #625b6d}}
 
@@ -235,9 +232,6 @@
   <div id="buttons"><span class="r" id="btn-restart"></span><span class="y"></span><span class="g"></span></div>
   <input id="hidden" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
 </div>
-<div id="level-picker" aria-label="Challenge difficulty">
-  <button data-set="A" class="active">A · EASY</button><button data-set="B">B · MEDIUM</button><button data-set="C">C · HARD</button>
-</div>
 <script>
 
 
@@ -291,7 +285,6 @@
   const urlParams=new URLSearchParams(window.location.search);
   const requestedLevel=(urlParams.get('level')||'B').toUpperCase();
   let ACTIVE_SET=Object.prototype.hasOwnProperty.call(CHALLENGE_SETS,requestedLevel)?requestedLevel:'A';
-  if(urlParams.get('organizer')==='1') document.body.classList.add('organizer');
   let FLAGS=CHALLENGE_SETS[ACTIVE_SET].flags;
   function flagCount(){ return Object.keys(FLAGS).length; }
   const banked=new Set();
@@ -939,18 +932,6 @@
     setTimeout(preIntro, 300);
   }
 
-  function versionSwitch(set){
-    if(!CHALLENGE_SETS[set]||set===ACTIVE_SET) return;
-    ACTIVE_SET=set;
-    FLAGS=CHALLENGE_SETS[set].flags;
-    fullReset();
-    document.querySelectorAll('#level-picker button').forEach(b=>b.classList.toggle('active',b.dataset.set===set));
-    print('<span class="dim">loaded '+esc(CHALLENGE_SETS[set].label)+' -- session reset.</span>');
-    print('');
-    updateProgress();
-    setTimeout(preIntro, 300);
-  }
-
   function detectVirt(){ inspectedVirt=true; print([
     '<span class="ok">kvm</span>',
     '<span class="faint">a full KVM virtual machine: your own kernel, memory, and filesystem, with root.</span>',
@@ -1145,10 +1126,6 @@
     updateProgress(); ready();
   }
   document.getElementById('btn-restart').addEventListener('click', function(){ restartAll(['confirm']); });
-  document.querySelectorAll('#level-picker button').forEach(btn=>{
-    btn.classList.toggle('active',btn.dataset.set===ACTIVE_SET);
-    btn.addEventListener('click',()=>versionSwitch(btn.dataset.set));
-  });
   preIntro();
 })();
 

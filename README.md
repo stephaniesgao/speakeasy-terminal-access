@@ -44,7 +44,7 @@ and visit `http://localhost:8000`.
 
 ## Three challenge sets (A / B / C)
 
-The A/B/C controls are temporarily visible for mode testing. B loads by default; `?level=A`, `?level=B`, or `?level=C` can also load a specific set. Switching levels resets the whole session (flags, machine states, filesystem, history).
+Difficulty selection is URL-only so participants do not see the organizer labels. B loads by default; use `?level=A`, `?level=B`, or `?level=C` to load a specific set. Reloading with a different level starts a fresh session (flags, machine states, filesystem, history).
 
 - **Set A (easy)** — wake `dm-igris` for a direct persistence flag, run the visible McQueen benchmark script without needing a machine argument for a direct speed flag, and sleep `dm-han` for a direct zero-compute flag.
 - **Set B (medium, the current experience)** — wake Igris and inspect its generated lifecycle log; inspect the McQueen script and run it with `dm-mcqueen` to receive the flag; inspect Han’s running usage, sleep it, and inspect usage again.
