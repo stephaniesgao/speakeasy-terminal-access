@@ -14,21 +14,54 @@ The Intern Expo version replaces the earlier open-ended format, where participan
 - The prize is a **Dedalus hoodie**.
 - If time expires first, the terminal locks and the participant must refresh to try again.
 
-## Running it
+## Organizer instruction manual
 
-No build step or dependencies. Just open the file in a browser:
+### Start the terminal
 
-```
-open index.html
-```
-
-or serve it locally:
+There is no build step and there are no package dependencies. From the project directory, start a local web server:
 
 ```
 python3 -m http.server 8000
 ```
 
-and visit `http://localhost:8000`.
+Keep that Terminal window open, then open the experience in a browser:
+
+```
+http://localhost:8000/
+```
+
+Opening `index.html` directly also works on most browsers, but the local server is recommended because it loads the logo and other assets consistently.
+
+### Choose a mode
+
+Mode selection is controlled only through the URL, so participants do not see difficulty buttons.
+
+- **B / Medium is the default:** `http://localhost:8000/`
+- **A / Easy:** `http://localhost:8000/?level=A`
+- **B / Medium explicitly:** `http://localhost:8000/?level=B`
+- **C / Hard:** `http://localhost:8000/?level=C`
+
+The `level` value is case-insensitive. If the URL contains an unknown value, the app falls back to A; with no `level` parameter, it loads B.
+
+### Reset for the next participant
+
+Refresh the browser page before every attempt:
+
+- macOS: `Command + R`
+- Windows/Linux: `Ctrl + R`
+- Or click the browser’s refresh button.
+
+Refreshing clears the current flags, timer, command history, generated files, and machine state. The participant returns to the initial connection screen, and the three-minute timer will not begin until they run the connect command.
+
+The terminal command `restart confirm` performs the same in-page reset without reloading the browser.
+
+### Change modes
+
+Edit the `level` value in the browser address bar and press Enter. For example, change `?level=B` to `?level=A`, or remove the query string entirely to return to the default B mode. Loading the new URL starts a fresh session automatically.
+
+### Stop the local server
+
+When the event is over, return to the Terminal window running the server and press `Ctrl + C`.
 
 ## How the puzzle works
 
@@ -40,7 +73,7 @@ and visit `http://localhost:8000`.
   - compute billing dropping to zero while a machine sleeps (`dedalus machines sleep` / `usage` on `dm-han`)
 - `submit dedalus{...}` banks a found flag, `flags` shows progress, and `unlock` reveals the prize screen once all three are banked.
 - `hint` gives a conceptual nudge without giving away exact commands.
-- The red button under the screen (or `restart confirm`) wipes the whole session back to zero.
+- Refreshing the page or running `restart confirm` wipes the whole session back to zero.
 
 ## Three challenge sets (A / B / C)
 
