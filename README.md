@@ -47,7 +47,7 @@ and visit `http://localhost:8000`.
 The A/B/C controls are temporarily visible for mode testing. B loads by default; `?level=A`, `?level=B`, or `?level=C` can also load a specific set. Switching levels resets the whole session (flags, machine states, filesystem, history).
 
 - **Set A (easy)** — wake `dm-igris` for a direct persistence flag, run the visible McQueen benchmark script without needing a machine argument for a direct speed flag, and sleep `dm-han` for a direct zero-compute flag.
-- **Set B (medium, the current experience)** — wake Igris and inspect its generated lifecycle log; inspect the McQueen script, run it with `dm-mcqueen`, then retrieve McQueen’s recorded result; inspect Han’s running usage, sleep it, and inspect usage again.
+- **Set B (medium, the current experience)** — wake Igris and inspect its generated lifecycle log; inspect the McQueen script and run it with `dm-mcqueen` to receive the flag; inspect Han’s running usage, sleep it, and inspect usage again.
 
 - **Set C (hard)** — evidence-chain versions of the same differentiators: players must verify the virtualization layer as well as cold-start speed, test real disk against a misleading competitor-style mount, and observe an autosleep phase change before zero compute billing yields its flag.
 

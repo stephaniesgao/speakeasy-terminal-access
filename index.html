@@ -5,53 +5,54 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DEXM Speakeasy Terminal</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap');
   :root{
-    --term-bg:#0e0a1a; --purple:#c9a9ff; --purple-dim:#9a7fd6; --purple-faint:#6b569e;
-    --hot:#ff7cda; --ok:#ffffff; --flag:#ffffff;
+    --term-bg:#0b0910; --purple:#D2BEFF; --purple-light:#CEABFF;
+    --purple-dim:rgba(210,190,255,.72); --purple-faint:rgba(210,190,255,.48); --purple-bg:rgba(210,190,255,.20);
+    --light-red:#FFB3B3; --light-red-rgb:255,179,179; --light-green:#B8E6C1;
+    --hot:var(--light-red); --ok:#ffffff; --flag:#F4BFE7; --flag-rgb:244,191,231;
   }
   *{margin:0;padding:0;box-sizing:border-box}
-  html,body{height:100%;overflow:hidden;background:#0a0710}
+  html,body{height:100%;overflow:hidden;background:#09080c}
   body{
-    font-family:'IBM Plex Mono','Monaco',ui-monospace,monospace;
+    font-family:'SFMono-Regular','SF Mono',ui-monospace,'Cascadia Mono','Roboto Mono',monospace;
     min-height:100vh; display:flex; align-items:flex-start; justify-content:center; padding-top:4vh;
-    background:#100b19;
+    background:linear-gradient(var(--purple-bg),var(--purple-bg)),#09080c;
   }
 
   /* A large, monitor-friendly terminal: no computer chassis, just the experience. */
   #machine{
     position:relative;
     width:min(86vw,1380px); height:76vh;
-    box-shadow:0 18px 48px rgba(0,0,0,.52),0 0 42px rgba(169,112,240,.18);
+    box-shadow:0 18px 48px rgba(0,0,0,.52),0 0 42px rgba(210,190,255,.18);
   }
 
   /* live terminal sits in the recessed screen, positioned as a % of the stage (matches the SVG screen rect) */
   #crt{
     position:absolute; overflow:hidden; cursor:text; z-index:3;
     inset:0;
-    border:1px solid #9a7fd6; border-radius:7px;
-    background:#0e0a1a;
-    box-shadow:inset 0 0 28px rgba(115,76,174,.10),0 0 18px rgba(169,112,240,.24);
+    border:1px solid rgba(210,190,255,.72); border-radius:7px;
+    background:linear-gradient(rgba(210,190,255,.04),rgba(210,190,255,.04)),var(--term-bg);
+    box-shadow:inset 0 0 28px rgba(210,190,255,.10),0 0 18px rgba(210,190,255,.20);
   }
   #crt::before,#crt::after{display:none}
 
-  #term-header{position:relative;z-index:2;height:48px;padding:0 16px;background:#1c1429;border-bottom:1px solid #45365f}
+  #term-header{position:relative;z-index:2;height:48px;padding:0 16px;background:rgba(210,190,255,.12);border-bottom:1px solid rgba(210,190,255,.28)}
   .hrow{height:100%;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px}
-  .dcs{color:#d8c8ee;font-size:14px;line-height:1;letter-spacing:0;white-space:nowrap}
+  .dcs{color:var(--purple);font-size:14px;line-height:1;letter-spacing:0;white-space:nowrap}
   .dcs br{display:none}
-  .dcs::before{content:'●  ●  ●   ';color:#806b9f}
-  .wordmark{justify-self:center;color:#f4edff;font-size:14px;text-shadow:0 0 10px rgba(201,169,255,.55)}
+  .dcs::before{content:'●  ●  ●   ';color:var(--purple-faint)}
+  .wordmark{justify-self:center;color:#fff;font-size:14px;text-shadow:0 0 10px rgba(210,190,255,.55)}
   .wordmark::after{content:'Dedalus Labs';}
   .wordmark pre{display:none}
-  .glyphs{justify-self:end;color:#917aa9;font-size:13px}
-  #timer{display:none;color:#d8c8ee;font-variant-numeric:tabular-nums;letter-spacing:.5px}
+  .glyphs{justify-self:end;color:var(--purple-dim);font-size:13px}
+  #timer{display:none;color:var(--purple);font-variant-numeric:tabular-nums;letter-spacing:.5px}
   #timer.running{display:inline}
-  #timer.warning{color:#fff;text-shadow:0 0 8px rgba(255,106,213,.55)}
+  #timer.warning{color:#fff;text-shadow:0 0 8px rgba(var(--light-red-rgb),.55)}
   .glyphs span{display:none}
 
   #screen{
-    position:relative; z-index:2; height:calc(100% - 145px); overflow-y:auto;
-    color:#f4eff9; font-size:clamp(17px,1.35vw,22px); line-height:1.48; padding:24px 28px 50px;
+    position:relative; z-index:2; height:calc(100% - 78px); overflow-y:auto;
+    color:#f4eff9; font-size:clamp(15px,1.1vw,18px); line-height:1.48; padding:24px 28px;
     text-shadow:none;
   }
   #screen::-webkit-scrollbar{width:5px}
@@ -60,33 +61,40 @@
   #output{white-space:pre-wrap;word-break:break-word}
   #inputline{white-space:pre-wrap;word-break:break-word}
   #prompt{color:var(--ok);text-shadow:0 0 8px rgba(255,255,255,.28)} #cmd{color:#fff}
-  #caret{color:#fff;animation:blink 1.05s step-end infinite;text-shadow:0 0 10px #c9a9ff}
+  #caret{color:#fff;animation:blink 1.05s step-end infinite;text-shadow:0 0 10px var(--purple)}
   @keyframes blink{50%{opacity:0}}
   #hidden{position:absolute;left:-9999px;opacity:0}
   .dim{color:var(--purple-dim)} .faint{color:var(--purple-faint)}
-  .hot{color:var(--hot);text-shadow:0 0 9px rgba(255,106,213,.35)}
-  .ok{color:var(--ok);text-shadow:0 0 8px rgba(255,255,255,.25),0 0 13px rgba(201,169,255,.25)}
-  .banner{color:#d9c2ff;text-shadow:0 0 10px rgba(201,169,255,.55)}
-  .flag{color:#fff;font-weight:600;text-shadow:0 0 7px rgba(201,169,255,.38)}
-  .flagline{color:#fff;font-weight:600;text-shadow:0 0 5px rgba(255,255,255,.4),0 0 10px rgba(201,169,255,.42);cursor:pointer}
-  .flagline:hover{color:#fff;text-shadow:0 0 7px rgba(255,255,255,.45),0 0 12px rgba(201,169,255,.48)}
-  .connect-command{color:#fff;font-weight:600;text-shadow:0 0 5px rgba(255,255,255,.38),0 0 11px rgba(201,169,255,.5)}
-  .connect-box{color:#fff;text-shadow:0 0 5px rgba(255,255,255,.4),0 0 12px rgba(201,169,255,.55)}
+  .hot{color:var(--hot);text-shadow:0 0 9px rgba(var(--light-red-rgb),.35)}
+  .ok{color:var(--ok);text-shadow:0 0 8px rgba(255,255,255,.25),0 0 13px rgba(210,190,255,.25)}
+  .banner{color:var(--purple);text-shadow:0 0 10px rgba(210,190,255,.55)}
+  .flag{color:var(--flag);font-weight:600;text-shadow:0 0 7px rgba(var(--flag-rgb),.38)}
+  .flagline{color:var(--flag);font-weight:600;text-shadow:0 0 5px rgba(var(--flag-rgb),.4),0 0 10px rgba(var(--flag-rgb),.35);cursor:pointer}
+  .flagline:hover{color:#fff;text-shadow:0 0 6px rgba(255,255,255,.8),0 0 13px rgba(255,255,255,.55)}
+  .connect-command{color:#fff;font-weight:600;text-shadow:0 0 5px rgba(255,255,255,.38),0 0 11px rgba(210,190,255,.5)}
+  .connect-box{color:#fff;text-shadow:0 0 5px rgba(255,255,255,.4),0 0 12px rgba(210,190,255,.55)}
   .intro-box{display:block;width:max-content;max-width:100%;margin:0 auto;white-space:pre}
   .quickcopy{cursor:pointer}
-  .quickcopy:hover{color:#fff;text-shadow:0 0 7px rgba(201,169,255,.4)}
-  #term-footer{position:absolute;z-index:9;left:0;right:0;bottom:0;height:30px;padding:5px 14px;text-align:right;background:#1c1429;border-top:1px solid #45365f}
-  #progress{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:#9a7fd6}
+  .quickcopy:hover{color:#fff;text-shadow:0 0 6px rgba(255,255,255,.8),0 0 13px rgba(255,255,255,.55)}
+  .intro-discovery,.intro-discovery .quickcopy{color:var(--light-red)}
+  .intro-action,.intro-action .quickcopy{color:var(--light-green)}
+  .intro-tip{color:#fff}
+  .intro-keyword{color:#fff;text-shadow:0 0 7px rgba(255,255,255,.3)}
+  .help-top,.help-top .quickcopy{color:var(--light-red)}
+  .help-bottom,.help-bottom .quickcopy{color:var(--light-green)}
+  .help-description{color:#fff}
+  #term-footer{position:absolute;z-index:9;left:0;right:0;bottom:0;height:30px;padding:5px 14px;text-align:right;background:rgba(210,190,255,.12);border-top:1px solid rgba(210,190,255,.28)}
+  #progress{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--purple-dim)}
   .pd{ color:var(--purple-faint); opacity:.4; text-shadow:none; }
-  .pd.on{ color:#fff; opacity:1; text-shadow:0 0 8px rgba(255,255,255,.75),0 0 14px rgba(180,130,255,.8); }
+  .pd.on{ color:#fff; opacity:1; text-shadow:0 0 8px rgba(255,255,255,.75),0 0 14px rgba(210,190,255,.8); }
   .pc{ margin-left:6px; color:var(--purple-dim); }
 
   @media (prefers-reduced-motion:reduce){#caret{animation:none}}
   #buttons{display:none}
 
   #level-picker{position:fixed;left:50%;top:82vh;transform:translateX(-50%);z-index:50;display:flex;gap:6px}
-  #level-picker button{font:600 12px 'IBM Plex Mono',monospace;color:#a98dce;background:#181221;border:1px solid #45365f;border-radius:4px;padding:6px 12px;cursor:pointer}
-  #level-picker button.active{color:#fff;background:#4f3970;box-shadow:none}
+  #level-picker button{font:600 12px 'SFMono-Regular','SF Mono',ui-monospace,monospace;color:var(--purple-dim);background:rgba(210,190,255,.10);border:1px solid rgba(210,190,255,.28);border-radius:4px;padding:6px 12px;cursor:pointer}
+  #level-picker button.active{color:#fff;background:var(--purple-bg);box-shadow:none}
   @media(max-width:700px){.wordmark,.glyphs{display:none}.hrow{grid-template-columns:1fr}#screen{padding:18px 22px}.dcs{font-size:13px}}
 
 </style>
@@ -172,7 +180,7 @@
 
     <!-- brand/label plate (top-left) -->
     <rect x="214" y="86" width="196" height="34" rx="6" fill="#211e26"/>
-    <text x="312" y="108" font-family="'IBM Plex Mono',monospace" font-size="17" letter-spacing="3"
+    <text x="312" y="108" font-family="'SFMono-Regular','SF Mono',monospace" font-size="17" letter-spacing="3"
           fill="#8b93a6" text-anchor="middle">DCS &#183; M0</text>
 
     <!-- ===== SCREEN BEZEL (recessed) ===== -->
@@ -243,18 +251,18 @@
       label:'Challenge A · Easy', short:'A',
       flags:{ wake:'dedalus{arise_with_persistence}', persist:'dedalus{50ms_coldstart_kachow}', zeroCompute:'dedalus{frozen_compute}' },
       hints:[
-        'A shadow is most useful when it remembers its former shape.',
-        'Some machines are built for the starting line.',
-        'The meter and the machine do not always move together.'
+        'Igris needs to wake up. Get up and see what’s left behind.',
+        'I wanna see McQueen’s lightning-fast cold start. Maybe there’s a race somewhere in the directory.',
+        'Han’s bill should look different once he’s asleep.'
       ]
     },
     B:{
       label:'Challenge B · Medium', short:'B',
       flags:{ wake:'dedalus{arise_with_persistence}', persist:'dedalus{50ms_coldstart_kachow}', zeroCompute:'dedalus{frozen_compute}' },
       hints:[
-        'What returns from sleep may leave a record of what it kept.',
-        'A checkered flag means more when the race can be repeated.',
-        'A before-and-after receipt can tell a colder story.'
+        'Igris needs to wake up. Get up and see what’s left behind.',
+        'I wanna see McQueen’s lightning-fast cold start. Maybe there’s a race somewhere in the directory.',
+        'Han’s bill should look different once he’s asleep.'
       ]
     },
     C:{
@@ -434,6 +442,13 @@
     try{ hidden.setSelectionRange(cursor,cursor); }catch(e){}
     renderInput();
   }
+  function insertInput(text){
+    const start=hidden.selectionStart==null?buffer.length:hidden.selectionStart;
+    const end=hidden.selectionEnd==null?start:hidden.selectionEnd;
+    const needsSpace=start>0&&!/\s$/.test(buffer.slice(0,start))&&!/^\s/.test(text);
+    const inserted=(needsSpace?' ':'')+text;
+    setInput(buffer.slice(0,start)+inserted+buffer.slice(end),start+inserted.length);
+  }
   function echoCmd(raw){ print('<span class="ok">'+esc(PROMPTSTR())+'</span>'+esc(raw)); }
   function opt(args,name){ const i=args.indexOf(name); return i>-1?args[i+1]:''; }
 
@@ -488,7 +503,7 @@
     if(cmd==='dedalus'){ print('<span class="faint">connect first: </span><span class="ok">dedalus ssh '+MACHINE_ID+'</span>'); return; }
     if(cmd==='clear'){ out.innerHTML=''; return; }
     if(cmd==='restart'){ restartAll(args); return; }
-    if(cmd==='help'){ help(); print(NL+'<span class="faint">connect to use machine operations: </span><span class="ok">dedalus ssh '+MACHINE_ID+'</span>'); return; }
+    if(cmd==='help'){ help(); print(NL+'<span class="faint">connect to use machine operations: </span><span class="ok quickcopy" data-command="dedalus ssh '+MACHINE_ID+'">dedalus ssh '+MACHINE_ID+'</span>'); return; }
     print('<span class="hot">'+esc(cmd)+': command not found</span> <span class="faint">(not connected. run: dedalus ssh '+MACHINE_ID+')</span>');
   }
 
@@ -537,15 +552,16 @@
       '<span class="dim">Usage: dedalus machines &lt;command&gt; [options]</span>',
       '<span class="dim">Pattern: dedalus machines &lt;command&gt; --machine-id &lt;machine-name&gt;</span>',
       '',
-      'Commands:',
+      '<span class="help-top">Commands:',
       '  <span class="quickcopy" data-command="dedalus machines list">dedalus machines list</span>',
-      '      List machines and lifecycle state.',
+      '      <span class="help-description">List machines and lifecycle state.</span>',
       '  <span class="quickcopy" data-command="dedalus machines wake --machine-id ">dedalus machines wake --machine-id &lt;id&gt;</span>',
-      '      Wake a sleeping machine.',
+      '      <span class="help-description">Wake a sleeping machine.</span>',
       '  <span class="quickcopy" data-command="dedalus machines sleep --machine-id ">dedalus machines sleep --machine-id &lt;id&gt;</span>',
-      '      Stop compute while retaining persistent state.',
+      '      <span class="help-description">Stop compute while retaining persistent state.</span>',
       '  <span class="quickcopy" data-command="dedalus machines usage --machine-id ">dedalus machines usage --machine-id &lt;id&gt;</span>',
-      '      Inspect compute and storage usage.'
+      '      <span class="help-description">Inspect compute and storage usage.</span></span>',
+      ''
       ];
       return print(lines.join(NL));
     }
@@ -553,21 +569,22 @@
     '<span class="dim">Usage: dedalus machines &lt;command&gt; [options]</span>',
     '<span class="dim">Pattern: dedalus machines &lt;command&gt; --machine-id &lt;machine-name&gt;</span>',
     '',
-    'Commands:',
-    '  dedalus machines list',
-    '      List machines and lifecycle state.',
-    '  dedalus machines retrieve --machine-id &lt;id&gt;',
-    '      Inspect configuration and recent lifecycle metrics.',
-    '  dedalus machines wake --machine-id &lt;id&gt;',
-    '      Wake a sleeping machine.',
-    '  dedalus machines sleep --machine-id &lt;id&gt;',
-    '      Stop compute while retaining persistent state.',
-    '  dedalus machines usage --machine-id &lt;id&gt;',
-    '      Inspect compute and storage usage.',
-    '  dedalus machines update --machine-id &lt;id&gt; --autosleep &lt;window&gt;',
-    '      Change autosleep configuration.',
-    '  dedalus machines watch --machine-id &lt;id&gt;',
-    '      Stream lifecycle state changes.'
+    '<span class="help-top">Commands:',
+    '  <span class="quickcopy" data-command="dedalus machines list">dedalus machines list</span>',
+    '      <span class="help-description">List machines and lifecycle state.</span>',
+    '  <span class="quickcopy" data-command="dedalus machines retrieve --machine-id ">dedalus machines retrieve --machine-id &lt;id&gt;</span>',
+    '      <span class="help-description">Inspect configuration and recent lifecycle metrics.</span>',
+    '  <span class="quickcopy" data-command="dedalus machines wake --machine-id ">dedalus machines wake --machine-id &lt;id&gt;</span>',
+    '      <span class="help-description">Wake a sleeping machine.</span>',
+    '  <span class="quickcopy" data-command="dedalus machines sleep --machine-id ">dedalus machines sleep --machine-id &lt;id&gt;</span>',
+    '      <span class="help-description">Stop compute while retaining persistent state.</span>',
+    '  <span class="quickcopy" data-command="dedalus machines usage --machine-id ">dedalus machines usage --machine-id &lt;id&gt;</span>',
+    '      <span class="help-description">Inspect compute and storage usage.</span>',
+    '  <span class="quickcopy" data-command="dedalus machines update --machine-id ">dedalus machines update --machine-id &lt;id&gt; --autosleep &lt;window&gt;</span>',
+    '      <span class="help-description">Change autosleep configuration.</span>',
+    '  <span class="quickcopy" data-command="dedalus machines watch --machine-id ">dedalus machines watch --machine-id &lt;id&gt;</span>',
+    '      <span class="help-description">Stream lifecycle state changes.</span></span>',
+    ''
   ].join(NL)); }
 
   function machinesList(){
@@ -613,15 +630,6 @@
       else if(ACTIVE_SET!=='C'||inspectedVirt) lines.push('<span class="faint">cold start measured off persistent storage. flag:</span> <span class="flag">'+esc(FLAGS.wake)+'</span>');
       else lines.push('<span class="faint">50ms verified. Now prove this speed came from a full VM, not a container.</span>');
     }
-    if(id==='dm-mcqueen'){
-      if(ACTIVE_SET==='B'&&mcqueenBenchmarked){
-        lines.push('  benchmark_runs     5');
-        lines.push('  benchmark_p50_ms   50');
-        lines.push('  readiness_probe    ssh-exec:/bin/true');
-        lines.push('  benchmark_status   passed');
-        lines.push(NL+'<span class="flagline">flag: '+esc(FLAGS.persist)+'</span>'+NL);
-      } else if(ACTIVE_SET==='B') lines.push('<span class="faint">no benchmark result recorded. run a cold-start benchmark first.</span>');
-    }
     print(lines.join(NL));
   }
 
@@ -643,10 +651,8 @@
       ...samples.map((ms,i)=>String(i+1).padStart(3,'0')+'   boot-'+String(731+i).padStart(4,'0')+'     '+String(ms).padStart(2,' ')+' ms   probe ok'),
       '',
       'samples=5  failures=0  min=48ms  <span class="ok">p50=50ms</span>  p95=52ms',
-      (ACTIVE_SET==='A'
+      (ACTIVE_SET!=='C'
         ? '<span class="faint">target p50 ≤ 50ms: passed</span>'+NL+NL+'<span class="flagline">flag: '+esc(FLAGS.persist)+'</span>'+NL
-        : ACTIVE_SET==='B'
-        ? '<span class="faint">target passed; result recorded. retrieve dm-mcqueen to verify it.</span>'
         : '<span class="faint">benchmark complete. This challenge set requires a different proof.</span>')
     ].join(NL));
   }
@@ -751,24 +757,24 @@
   function help(){
     if(ACTIVE_SET!=='C') return print([
       '<span class="dim">available commands</span>',
-      '  <span class="quickcopy" data-command="dedalus machines">dedalus machines</span>                manage and inspect machines',
+      '<span class="help-top">  <span class="quickcopy" data-command="dedalus machines">dedalus machines</span>                manage and inspect machines',
       '  <span class="quickcopy" data-command="dedalus machines --help">dedalus machines --help</span>         list available machine operations',
-      '  <span class="quickcopy" data-command="dedalus ssh ">dedalus ssh &lt;id&gt;</span>                open a shell on a machine',
+      '  <span class="quickcopy" data-command="dedalus ssh ">dedalus ssh &lt;id&gt;</span>                open a shell on a machine</span>',
       '',
-      '  ls / cd / cat / pwd             navigate the filesystem',
+      '<span class="help-bottom">  ls / cd / cat / pwd             navigate the filesystem',
       '  bash &lt;script&gt; [args]             run a shell script',
       '  submit &lt;flag&gt; / flags           bank flags / check progress',
       '  unlock                          claim the prize after all flags',
       '  hint                            show challenge hints',
-      '  clear                           clear the screen'
+      '  clear                           clear the screen</span>'
     ].join(NL));
     print([
     '<span class="dim">available commands</span>',
-    '  <span class="quickcopy" data-command="dedalus machines">dedalus machines</span>                manage and inspect machines',
+    '<span class="help-top">  <span class="quickcopy" data-command="dedalus machines">dedalus machines</span>                manage and inspect machines',
     '  <span class="quickcopy" data-command="dedalus machines --help">dedalus machines --help</span>         list available machine operations',
-    '  <span class="quickcopy" data-command="dedalus ssh ">dedalus ssh &lt;id&gt;</span>                open a shell on a machine',
+    '  <span class="quickcopy" data-command="dedalus ssh ">dedalus ssh &lt;id&gt;</span>                open a shell on a machine</span>',
     '',
-    '  ls / cd / cat / pwd / find      explore the filesystem',
+    '<span class="help-bottom">  ls / cd / cat / pwd / find      explore the filesystem',
     '  bash &lt;script&gt; [args]             run a shell script',
     '  touch &lt;path&gt;                    create an empty file',
     '  echo &lt;text&gt; &gt; &lt;path&gt;            write text to a file',
@@ -779,7 +785,7 @@
     '  submit &lt;flag&gt; / flags           bank flags / progress',
     '  unlock                          open the door once every flag is banked',
     '  hint                            a conceptual nudge',
-    '  clear                           wipe the screen'
+    '  clear                           wipe the screen</span>'
   ].join(NL)); }
 
   function ls(args){
@@ -1063,25 +1069,15 @@
     const quick=e.target.closest('.quickcopy');
     if(!quick) return;
     if(quick.dataset.command!==undefined){
-      buffer=quick.dataset.command;
+      insertInput(quick.dataset.command); focusInput(); return;
     } else if(quick.dataset.machine){
       const id=quick.dataset.machine;
-      if(/--machine-id\s*$/.test(buffer)) buffer+=id;
-      else if(buffer.trim()==='bash cold-start-benchmark.sh') buffer+=' '+id;
-      else buffer=id;
+      insertInput(id); focusInput(); return;
     } else if(quick.dataset.file){
-      const file=quick.dataset.file;
-      if(buffer===''||/\s$/.test(buffer)) buffer+=file;
-      else if(['cat','cd','bash'].includes(buffer.trim())) buffer+=' '+file;
-      else buffer=file;
+      insertInput(quick.dataset.file); focusInput(); return;
     } else if(quick.dataset.token){
-      const token=quick.dataset.token;
-      if(buffer===''||/\s$/.test(buffer)) buffer+=token;
-      else if(/--machine-id\s*$/.test(buffer)&&/^dm-/.test(token)) buffer+=token;
-      else if(['cat','cd','bash','submit','dedalus','dedalus machines'].includes(buffer.trim())) buffer+=' '+token;
-      else buffer=token;
+      insertInput(quick.dataset.token); focusInput(); return;
     }
-    setInput(buffer); focusInput();
   });
   hidden.addEventListener('input',()=>{ buffer=hidden.value; renderInput(); });
   hidden.addEventListener('keyup',e=>{ if(['ArrowLeft','ArrowRight','Home','End'].includes(e.key)) renderInput(); });
@@ -1118,22 +1114,21 @@
       '<span class="banner">+'+'-'.repeat(boxWidth-2)+'+</span>',
       centeredBoxLine('Explore the terminal. Find all 3 hidden flags to unlock your prize.','<span class="ok">Explore the terminal. Find all 3 hidden flags to unlock your prize.</span>'),
       boxLine(''),
-      boxLine('List machines:    dedalus machines list','List machines:    <span class="ok quickcopy" data-command="dedalus machines list">dedalus machines list</span>'),
-      boxLine('Discover tools:   dedalus machines --help','Discover tools:   <span class="ok quickcopy" data-command="dedalus machines --help">dedalus machines --help</span>'),
-      boxLine('Need a nudge:     hint','Need a nudge:     <span class="ok quickcopy" data-command="hint">hint</span>'),
+      boxLine('List machines:    dedalus machines list','<span class="intro-discovery">List machines:    <span class="quickcopy" data-command="dedalus machines list">dedalus machines list</span></span>'),
+      boxLine('Discover tools:   dedalus machines --help','<span class="intro-discovery">Discover tools:   <span class="quickcopy" data-command="dedalus machines --help">dedalus machines --help</span></span>'),
+      boxLine('Need a nudge:     hint','<span class="intro-discovery">Need a nudge:     <span class="quickcopy" data-command="hint">hint</span></span>'),
       boxLine(''),
-      boxLine('Submit a flag:    submit dedalus{...}','Submit a flag:    <span class="ok quickcopy" data-command="submit dedalus{...}">submit dedalus{...}</span>'),
-      boxLine('Check progress:   flags','Check progress:   <span class="ok quickcopy" data-command="flags">flags</span>'),
-      boxLine('Claim prize:      unlock','Claim prize:      <span class="ok quickcopy" data-command="unlock">unlock</span>'),
+      boxLine('Submit a flag:    submit dedalus{...}','<span class="intro-action">Submit a flag:    <span class="quickcopy" data-command="submit dedalus{...}">submit dedalus{...}</span></span>'),
+      boxLine('Check progress:   flags','<span class="intro-action">Check progress:   <span class="quickcopy" data-command="flags">flags</span></span>'),
+      boxLine('Claim prize:      unlock','<span class="intro-action">Claim prize:      <span class="quickcopy" data-command="unlock">unlock</span></span>'),
       boxLine(''),
-      boxLine('Tip: clickable commands and flags are quick-copy enabled.'),
+      boxLine('Tip: clickable commands and flags are quick-copy enabled.','<span class="intro-tip">Tip: clickable commands and flags are quick-copy enabled.</span>'),
       boxLine(''),
       centeredBoxLine('+---------------------------------------------+','<span class="connect-box">+---------------------------------------------+</span>'),
       centeredBoxLine('|  Connect: dedalus ssh '+MACHINE_ID+'  |','<span class="connect-box quickcopy" data-command="dedalus ssh '+MACHINE_ID+'">|  Connect: dedalus ssh '+MACHINE_ID+'  |</span>'),
       centeredBoxLine('+---------------------------------------------+','<span class="connect-box">+---------------------------------------------+</span>'),
       boxLine(''),
-      '<span class="banner">+'+'-'.repeat(boxWidth-2)+'+</span>',
-      ''
+      '<span class="banner">+'+'-'.repeat(boxWidth-2)+'+</span>'
     ];
     print('<span class="intro-box">'+lines.join(NL)+'</span>');
     updateProgress(); ready();
